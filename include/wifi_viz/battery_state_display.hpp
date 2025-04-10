@@ -44,6 +44,10 @@ private:
   rviz_common::properties::FloatProperty* color_property_;
   rviz_common::properties::IntProperty* x_position_property_;
   rviz_common::properties::IntProperty* y_position_property_;
+  rviz_common::properties::IntProperty* width_property_;
+  rviz_common::properties::IntProperty* height_property_;
+  rviz_common::properties::IntProperty* screen_x_property_;
+  rviz_common::properties::IntProperty* screen_y_property_;
 
   BatteryBarVisual* battery_bar_visual_;  // Add the BatteryBarVisual member
 

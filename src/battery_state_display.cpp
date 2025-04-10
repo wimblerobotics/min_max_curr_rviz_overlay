@@ -33,6 +33,28 @@ BatteryStateDisplay::BatteryStateDisplay()
                                                                     "X position of the overlay.", this);
   y_position_property_ = new rviz_common::properties::IntProperty("Y Position", 10,
                                                                     "Y position of the overlay.", this);
+
+  // Add width and height properties
+  width_property_ = new rviz_common::properties::IntProperty("Width", 200,
+                                                              "Width of the battery bar in pixels.", this);
+  width_property_->setMin(1);
+  width_property_->setMax(1000);
+  
+  height_property_ = new rviz_common::properties::IntProperty("Height", 20,
+                                                               "Height of the battery bar in pixels.", this);
+  height_property_->setMin(1);
+  height_property_->setMax(100);
+
+  // Add screen position properties
+  screen_x_property_ = new rviz_common::properties::IntProperty("Screen X", 100,
+                                                                 "X position on screen in pixels.", this);
+  screen_x_property_->setMin(0);
+  screen_x_property_->setMax(2000);
+  
+  screen_y_property_ = new rviz_common::properties::IntProperty("Screen Y", 50,
+                                                                 "Y position on screen in pixels.", this);
+  screen_y_property_->setMin(0);
+  screen_y_property_->setMax(2000);
 }
 
 BatteryStateDisplay::~BatteryStateDisplay()
@@ -76,7 +98,11 @@ void BatteryStateDisplay::processMessage(sensor_msgs::msg::BatteryState::ConstSh
   RCLCPP_INFO(rclcpp::get_logger("battery_state_display"), "X Position: %d", x_position_property_->getInt());
   RCLCPP_INFO(rclcpp::get_logger("battery_state_display"), "Y Position: %d", y_position_property_->getInt());
 
-  battery_bar_visual_->setVoltage(msg->voltage);  // Update the battery bar visual
+  battery_bar_visual_->setVoltage(msg->voltage);
+  battery_bar_visual_->setDimensions(width_property_->getInt(), height_property_->getInt());
+  
+  // Update screen position
+  battery_bar_visual_->setScreenPosition(screen_x_property_->getInt(), screen_y_property_->getInt());
 
   rviz_2d_overlay_msgs::msg::OverlayText overlay;
   overlay.text = "Voltage: " + std::to_string(msg->voltage) + " V";
