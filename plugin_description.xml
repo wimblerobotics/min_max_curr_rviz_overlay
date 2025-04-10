@@ -1,0 +1,11 @@
+<library path="wifi_viz">
+  <class
+    name="wifi_viz/BatteryStateDisplay"
+    type="wifi_viz::BatteryStateDisplay"
+    base_class_type="rviz_common::Display">
+    <description>
+      Display battery voltage as an overlay in RViz2.
+    </description>
+  </class>
+</library>
+
