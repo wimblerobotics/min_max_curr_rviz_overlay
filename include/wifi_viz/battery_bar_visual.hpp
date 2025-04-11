@@ -31,6 +31,7 @@ private:
   Ogre::SceneNode* root_node_;
   Ogre::SceneNode* bar_node_;
   Ogre::SceneNode* frame_node_;
+  Ogre::SceneNode* bar_container_node_; // New container node for bar
   Ogre::Entity* bar_entity_;
   Ogre::Entity* frame_entity_;
   Ogre::MaterialPtr material_;

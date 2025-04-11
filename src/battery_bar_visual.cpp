@@ -25,10 +25,14 @@ BatteryBarVisual::BatteryBarVisual(Ogre::SceneManager* scene_manager)
 
   // Create the root scene node
   root_node_ = scene_manager_->createSceneNode(name + "RootNode");
-  bar_node_ = scene_manager_->createSceneNode(name + "BarNode");
   frame_node_ = scene_manager_->createSceneNode(name + "FrameNode");
-  root_node_->addChild(bar_node_);
+  bar_container_node_ = scene_manager_->createSceneNode(name + "ContainerNode");
+  bar_node_ = scene_manager_->createSceneNode(name + "BarNode");
+
+  // Set up node hierarchy
   root_node_->addChild(frame_node_);
+  root_node_->addChild(bar_container_node_);
+  bar_container_node_->addChild(bar_node_);
 
   // Attach root node to scene manager's root node
   scene_manager_->getRootSceneNode()->addChild(root_node_);
@@ -113,13 +117,16 @@ void BatteryBarVisual::setDimensions(int width, int height) {
 
   // Scale the frame to be the exact size as the bar
   frame_node_->setScale(world_width, world_height, 1.0f);
-  RCLCPP_INFO(rclcpp::get_logger("setDimensions"),
-              "frame node scale: %f, %f, %f", world_width,
-              world_height, 1.0f);
 
-  // Position the bar and frame
-  bar_node_->setPosition(0, 0, 0.1f);  // Slightly in front of the frame
-  frame_node_->setPosition(0, 0, 0);
+  // Position the bar_container_node at the LEFT EDGE of the frame
+  float frame_left_edge = -world_width / 2.0f;
+  bar_container_node_->setPosition(frame_left_edge, 0, 0.1f);
+
+  // Don't set bar_node position here - it will be set in setVoltage
+
+  RCLCPP_INFO(rclcpp::get_logger("setDimensions"),
+              "frame size: %f x %f, bar_container at x=%f",
+              world_width, world_height, frame_left_edge);
 }
 
 void BatteryBarVisual::setScreenPosition(int x, int y) {
@@ -137,19 +144,24 @@ void BatteryBarVisual::setVoltage(float voltage) {
 
   // Convert pixels to world units
   float pixel_scale = 0.01f;
-  float world_width = width_ * pixel_scale;
   float world_height = height_ * pixel_scale;
+  float world_width = width_ * pixel_scale;
 
   // Calculate the width of the inner bar based on the normalized voltage
   float bar_width = normalized_voltage * width_;
   float world_bar_width = bar_width * pixel_scale;
 
-  // Scale the bar horizontally based on voltage
+  // Scale the bar based on voltage
   bar_node_->setScale(world_bar_width, world_height, 1.0f);
 
-  // Position the bar so it grows from the left
-  bar_node_->setPosition((-world_width / 2.0f) + (world_bar_width / 2.0f), 0.0f,
-                         0.1f);
+  // THE KEY FIX: Position the bar so its LEFT edge aligns with the container's position
+  // Since the plane's pivot is at its center, we need to shift it right by half its width
+  float half_bar_width = world_bar_width / 2.0f;
+  bar_node_->setPosition(half_bar_width, 0.0f, 0.0f);
+
+  RCLCPP_INFO(rclcpp::get_logger("setVoltage"),
+              "Voltage: %.2f (%.2f%%), bar width: %.2f, half_width: %.2f",
+              voltage, normalized_voltage * 100.0f, world_bar_width, half_bar_width);
 
   // Update color based on voltage level
   float r = 1.0f - normalized_voltage;  // Red increases as voltage decreases
@@ -182,6 +194,9 @@ void BatteryBarVisual::setUserData(const Ogre::Any& data) {
 }
 
 void BatteryBarVisual::setOrientation(const Ogre::Quaternion& orientation) {
+  // Unused parameter warning suppressed
+  (void)orientation;
+
   // Keep the orientation fixed to screen space
   root_node_->setOrientation(Ogre::Quaternion::IDENTITY);
 }
