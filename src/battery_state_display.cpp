@@ -99,7 +99,6 @@ void BatteryStateDisplay::processMessage(sensor_msgs::msg::BatteryState::ConstSh
   RCLCPP_INFO(rclcpp::get_logger("battery_state_display"), "Y Position: %d", y_position_property_->getInt());
 
   battery_bar_visual_->setVoltage(msg->voltage);
-  battery_bar_visual_->setDimensions(width_property_->getInt(), height_property_->getInt());
   
   // Update screen position
   battery_bar_visual_->setScreenPosition(screen_x_property_->getInt(), screen_y_property_->getInt());

@@ -20,12 +20,12 @@ public:
 
   // Implement the pure virtual functions
   void setPosition(const Ogre::Vector3& position) override;
-  void setOrientation(const Ogre::Quaternion& orientation) override;
   void setScale(const Ogre::Vector3& scale) override;
   void setColor(float r, float g, float b, float a) override;
   Ogre::Vector3& getPosition() override;
   Ogre::Quaternion& getOrientation() override;
   void setUserData(const Ogre::Any& data) override;
+  void setOrientation(const Ogre::Quaternion& orientation) override;
 
 private:
   Ogre::SceneNode* root_node_;
