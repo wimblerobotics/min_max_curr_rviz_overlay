@@ -74,6 +74,9 @@ void BatteryStateDisplay::onInitialize()
 
   battery_bar_visual_ = new BatteryBarVisual(context_->getSceneManager());  // Initialize the visual
 
+  // Set initial screen position
+  battery_bar_visual_->setScreenPosition(screen_x_property_->getInt(), screen_y_property_->getInt());
+
   updateSubscription();
 }
 

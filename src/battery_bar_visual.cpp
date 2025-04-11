@@ -84,6 +84,9 @@ BatteryBarVisual::BatteryBarVisual(Ogre::SceneManager* scene_manager)
   // Set initial dimensions
   setDimensions(width_, height_);
 
+  // Initialize bar width to zero
+  bar_node_->setScale(0.0f, 1.0f, 1.0f);
+
   // Make sure the bar is visible
   bar_entity_->setVisible(true);
   frame_entity_->setVisible(true);
@@ -108,13 +111,11 @@ void BatteryBarVisual::setDimensions(int width, int height) {
   float world_width = width_ * pixel_scale;
   float world_height = height_ * pixel_scale;
 
-  // Scale the frame to be slightly larger than the bar
-  float frame_scale = 1.1f;
-  frame_node_->setScale(world_width * frame_scale, world_height * frame_scale,
-                        1.0f);
+  // Scale the frame to be the exact size as the bar
+  frame_node_->setScale(world_width, world_height, 1.0f);
   RCLCPP_INFO(rclcpp::get_logger("setDimensions"),
-              "frame node scale: %f, %f, %f", world_width * frame_scale,
-              world_height * frame_scale, 1.0f);
+              "frame node scale: %f, %f, %f", world_width,
+              world_height, 1.0f);
 
   // Position the bar and frame
   bar_node_->setPosition(0, 0, 0.1f);  // Slightly in front of the frame
