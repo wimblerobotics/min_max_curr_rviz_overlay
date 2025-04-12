@@ -404,18 +404,33 @@ void WifiStateDisplay::updateOverlayTexture()
   if (vertical_mode) {
     // --- Vertical Layout ---
     // Define Rects (Max at top, Min at bottom)
-    QRect max_text_rect(0, 0, bar_width, min_text_width_); // Use text width as height
-    QRect bar_rect(0, max_text_rect.bottom() + text_margin_, bar_width, bar_height);
-    QRect min_text_rect(0, bar_rect.bottom() + text_margin_, bar_width, max_text_width_);
-    QRect topic_text_rect(bar_width, 0, text_height_, total_texture_height); // Rotated text area
+    QRect max_text_area(0, 0, bar_width, min_text_width_); // Use text width as height
+    QRect bar_rect(0, max_text_area.bottom() + text_margin_, bar_width, bar_height);
+    QRect min_text_area(0, bar_rect.bottom() + text_margin_, bar_width, max_text_width_);
+    QRect topic_text_area(bar_width, 0, text_height_, total_texture_height); // Rotated text area
 
-    // Draw Min/Max Text (Horizontally centered in their areas)
+    // --- Draw Rotated Min/Max Text ---
+    painter.setPen(text_color);
     QString max_text = QString::number(max_value_, 'f', 1);
-    painter.drawText(max_text_rect, Qt::AlignHCenter | Qt::AlignVCenter, max_text);
     QString min_text = QString::number(min_value_, 'f', 1);
-    painter.drawText(min_text_rect, Qt::AlignHCenter | Qt::AlignVCenter, min_text);
 
-    // Draw Bar (Vertical)
+    // Draw Max Text (Rotated -90 deg, centered above bar)
+    painter.save();
+    painter.translate(max_text_area.center().x(), max_text_area.bottom() - (text_margin_ + 10)); // Added + 10
+    painter.rotate(-90);
+    QRect rotated_max_rect(-max_text_area.height() / 2, -max_text_area.width() / 2, max_text_area.height(), max_text_area.width());
+    painter.drawText(rotated_max_rect, Qt::AlignCenter, max_text);
+    painter.restore();
+
+    // Draw Min Text (Rotated -90 deg, centered below bar)
+    painter.save();
+    painter.translate(min_text_area.center().x(), min_text_area.top() + (text_margin_ + 10)); // Added + 10
+    painter.rotate(-90);
+    QRect rotated_min_rect(-min_text_area.height() / 2, -min_text_area.width() / 2, min_text_area.height(), min_text_area.width());
+    painter.drawText(rotated_min_rect, Qt::AlignCenter, min_text);
+    painter.restore();
+
+    // --- Draw Bar (Vertical) ---
     int available_height = bar_rect.height() - 2 * frame_thickness;
     int bar_fill_height = std::max(0, static_cast<int>(available_height * percentage));
 
@@ -430,7 +445,7 @@ void WifiStateDisplay::updateOverlayTexture()
     painter.drawRect(frame_draw_rect);
 
     // Draw Fill (Starts from bottom)
-    QColor bar_color; // Same color logic
+    QColor bar_color;
     if (percentage < 0.5f) { bar_color = QColor::fromRgbF(1.0, percentage * 2.0, 0.0); }
     else { bar_color = QColor::fromRgbF(1.0 - (percentage - 0.5) * 2.0, 1.0, 0.0); }
 
@@ -439,27 +454,31 @@ void WifiStateDisplay::updateOverlayTexture()
         painter.setBrush(bar_color);
         QRect bar_fill_rect(
             bar_rect.left() + frame_thickness,
-            bar_rect.bottom() - frame_thickness - bar_fill_height, // Y starts from bottom
+            bar_rect.bottom() - frame_thickness - bar_fill_height,
             bar_rect.width() - 2 * frame_thickness,
-            bar_fill_height); // Height of fill
+            bar_fill_height);
         painter.drawRect(bar_fill_rect);
     }
 
-    // Draw Current Value Text (Centered Horizontally in Bar Rect)
+    // --- Draw Rotated Current Value Text (Centered in Bar Rect) ---
     painter.setPen(text_color);
     QString current_text = QString::number(current_value_, 'f', 1);
-    painter.drawText(bar_rect, Qt::AlignHCenter | Qt::AlignVCenter, current_text);
+    painter.save();
+    painter.translate(bar_rect.center());
+    painter.rotate(-90);
+    QRect rotated_curr_rect(-bar_rect.height() / 2, -bar_rect.width() / 2, bar_rect.height(), bar_rect.width());
+    painter.drawText(rotated_curr_rect, Qt::AlignCenter, current_text);
+    painter.restore();
 
-    // Draw Topic Text (Rotated 90 degrees)
+    // --- Draw Rotated Topic Text ---
     QString topic_text = QString::fromStdString(topic_property_->getTopicStd());
     if (!topic_text.isEmpty()) {
-        painter.save(); // Save current state
-        painter.translate(topic_text_rect.left(), topic_text_rect.bottom()); // Move origin to bottom-left of text area
-        painter.rotate(-90); // Rotate counter-clockwise
-        // Draw text relative to new origin, centered vertically in the original rect's width
-        QRect rotated_draw_rect(0, 0, topic_text_rect.height(), topic_text_rect.width());
+        painter.save();
+        painter.translate(topic_text_area.left(), topic_text_area.bottom());
+        painter.rotate(-90);
+        QRect rotated_draw_rect(0, 0, topic_text_area.height(), topic_text_area.width());
         painter.drawText(rotated_draw_rect.adjusted(2, 0, -2, 0), Qt::AlignCenter, topic_text);
-        painter.restore(); // Restore original state
+        painter.restore();
     }
 
   } else {
@@ -490,7 +509,7 @@ void WifiStateDisplay::updateOverlayTexture()
     painter.drawRect(frame_draw_rect);
 
     // Draw Fill
-    QColor bar_color; // Same color logic
+    QColor bar_color;
     if (percentage < 0.5f) { bar_color = QColor::fromRgbF(1.0, percentage * 2.0, 0.0); }
     else { bar_color = QColor::fromRgbF(1.0 - (percentage - 0.5) * 2.0, 1.0, 0.0); }
 
