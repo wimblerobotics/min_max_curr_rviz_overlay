@@ -186,8 +186,6 @@ void WifiStateDisplay::reset()
 
 void WifiStateDisplay::processMessage(wifi_viz::msg::MinMaxCurr::ConstSharedPtr msg)
 {
-  setStatus(rviz_common::properties::StatusProperty::Ok, "Topic", "OK");
-
   current_value_ = msg->current;
   min_value_ = msg->min;
   max_value_ = msg->max;
