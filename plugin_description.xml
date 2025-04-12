@@ -1,11 +1,10 @@
-<library path="wifi_viz">
+<library path="libwifi_viz">
   <class
     name="wifi_viz/BatteryStateDisplay"
     type="wifi_viz::BatteryStateDisplay"
-    base_class_type="rviz_common::Display"
-    message_type="sensor_msgs/msg/BatteryState">
+    base_class_type="rviz_common::Display">
     <description>
-      Display battery voltage as an overlay in RViz2.
+      Displays sensor_msgs/BatteryState as a 2D bar graph overlay.
     </description>
     <message_type>sensor_msgs/msg/BatteryState</message_type>
   </class>

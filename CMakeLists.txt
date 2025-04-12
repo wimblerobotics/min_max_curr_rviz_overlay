@@ -1,109 +1,105 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.5)
 project(wifi_viz)
 
-# Force building shared libraries only
-set(BUILD_SHARED_LIBS ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_CXX_VISIBILITY_PRESET hidden)
-set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
-
-# Set default build type to Debug if not specified
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+# Default to C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
 endif()
-
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic -Wnon-virtual-dtor -Woverloaded-virtual)
-endif()
-
-# Add -fPIC and -rdynamic flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -rdynamic")
-
-# Add debug flags
-set(CMAKE_CXX_FLAGS_DEBUG "-g")
 
 # Find dependencies
 find_package(ament_cmake REQUIRED)
-find_package(rviz_common REQUIRED)
-find_package(rviz_rendering REQUIRED)
-find_package(rviz_ogre_vendor REQUIRED)
-find_package(rviz_2d_overlay_msgs REQUIRED)
-find_package(sensor_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(resource_retriever REQUIRED)
-find_package(rviz_default_plugins REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(rviz_common REQUIRED)
+find_package(rviz_ogre_vendor REQUIRED) # Needed for Ogre overlay classes
+find_package(pluginlib REQUIRED)
+find_package(Qt5 REQUIRED COMPONENTS Core Widgets Gui) # Gui needed for QPainter/QImage
 
-set(rviz_default_plugins_headers_to_mock
+# Enable Qt moc/uic/rcc
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTORCC ON)
+
+# Make sure MOC finds all necessary headers
+set(CMAKE_AUTOMOC_SEARCH_PATHS include src)
+
+# Add explicit MOC processing for our display class
+qt5_wrap_cpp(MOC_FILES
   include/wifi_viz/battery_state_display.hpp
 )
-foreach(header "${rviz_default_plugins_headers_to_mock}")
-  qt5_wrap_cpp(rviz_default_plugins_moc_files "${header}")
-endforeach()
 
-set(rviz_default_plugins_source_files
-  src/battery_state_display.cpp
-  src/battery_bar_visual.cpp # Add the new source file
-)
+# Force symbol visibility for exported classes
+set(CMAKE_CXX_VISIBILITY_PRESET default)
+set(CMAKE_VISIBILITY_INLINES_HIDDEN OFF)
 
 # Include directories
 include_directories(
   include
-  ${rviz_rendering_INCLUDE_DIRS} # add the rviz_rendering include directory
+  ${rviz_ogre_vendor_INCLUDE_DIRS} # Add Ogre includes
 )
 
-# Add library
+# Add the library with the moc files
 add_library(${PROJECT_NAME} SHARED
-  ${rviz_default_plugins_moc_files}
-  ${rviz_default_plugins_source_files}
+  src/battery_state_display.cpp
+  ${MOC_FILES}
 )
 
-target_include_directories(${PROJECT_NAME} PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
-  ${rviz_default_plugins}
-  ${Qt5Widgets_INCLUDE_DIRS}
-)
-
-# Link libraries
-target_link_libraries(${PROJECT_NAME} PUBLIC
-  rviz_common::rviz_common
-  rviz_rendering::rviz_rendering
-  rviz_2d_overlay_msgs::rviz_2d_overlay_msgs__rosidl_typesupport_cpp
-  sensor_msgs::sensor_msgs__rosidl_typesupport_cpp
-  rclcpp::rclcpp
-  rviz_ogre_vendor::OgreMain
-  rviz_ogre_vendor::OgreOverlay
-  resource_retriever::resource_retriever
-)
-
-target_link_libraries(${PROJECT_NAME} PRIVATE
-  resource_retriever::resource_retriever
-)
-
-# Ensure symbols are exported
+# Set visibility macros
 target_compile_definitions(${PROJECT_NAME} PRIVATE "RVIZ_DEFAULT_PLUGINS_BUILDING_LIBRARY")
 
-# Install targets
+# Add dependencies
+ament_target_dependencies(${PROJECT_NAME}
+  rclcpp
+  sensor_msgs
+  rviz_common
+  rviz_ogre_vendor # Add Ogre dependency
+  pluginlib
+)
+
+# Link Qt and Ogre libraries
+target_link_libraries(${PROJECT_NAME}
+  Qt5::Core
+  Qt5::Widgets
+  Qt5::Gui
+  ${rviz_ogre_vendor_LIBRARIES} # Link Ogre libraries
+)
+
+# Export include directory
+target_include_directories(${PROJECT_NAME} PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+# Export the plugin
+pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)
+
+# Install the library
 install(TARGETS ${PROJECT_NAME}
   EXPORT ${PROJECT_NAME}
-  ARCHIVE DESTINATION
+  ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
 
-# Install plugin description
+# Install headers
+install(DIRECTORY include/${PROJECT_NAME}/
+  DESTINATION include/${PROJECT_NAME}
+)
+
+# Install the plugin description file
 install(FILES plugin_description.xml
   DESTINATION share/${PROJECT_NAME}
 )
 
-# # Install plugin description to the correct location for RViz2
-# install(FILES plugin_description.xml
-#   DESTINATION share/rviz2/plugins
-# )
-
-# Export plugin description file
-pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)
-
-ament_package(
-  # CONFIG_EXTRAS "rviz_default_plugins-extras.cmake"
+# Exports
+ament_export_targets(${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(
+  rclcpp
+  sensor_msgs
+  rviz_common
+  rviz_ogre_vendor # Add Ogre dependency
+  pluginlib
+  Qt5
 )
+
+ament_package()

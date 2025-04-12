@@ -2,39 +2,26 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>wifi_viz</name>
-  <version>0.0.0</version>
-  <description>A RViz2 display plugin for visualizing battery state as a bar graph</description>
+  <version>0.1.0</version>
+  <description>An RViz display plugin for visualizing battery state as a bar graph overlay.</description>
   <maintainer email="mike@wimblerobotics.com">ros</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <buildtool_depend>ament_cmake_ros</buildtool_depend>
+  <!-- <buildtool_depend>ament_cmake_ros</buildtool_depend> Redundant if ament_cmake is present -->
 
-  <build_depend>qtbase5-dev</build_depend>
-  <build_depend>rviz_ogre_vendor</build_depend>
-  <build_depend>rviz_default_plugins</build_depend>
-
-  <build_export_depend>rviz_ogre_vendor</build_export_depend>
-
-  <exec_depend>libqt5-core</exec_depend>
-  <exec_depend>libqt5-gui</exec_depend>
-  <exec_depend>libqt5-opengl</exec_depend>
-  <exec_depend>libqt5-widgets</exec_depend>
-  <exec_depend>rviz_ogre_vendor</exec_depend>
-
-  <depend>rviz_common</depend>
-  <depend>rviz_rendering</depend>
-  <depend>rviz_2d_overlay_plugins</depend>
-  <depend>sensor_msgs</depend>
   <depend>rclcpp</depend>
-  <depend>generate_parameter_library</depend>
-  <depend>resource_retriever</depend>
+  <depend>sensor_msgs</depend>
+  <depend>rviz_common</depend>
+  <depend>rviz_ogre_vendor</depend>
+  <depend>pluginlib</depend>
+  <depend>qtbase5-dev</depend> <!-- For Qt Gui/Widgets/Core -->
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
-    <!-- <rviz_common plugin="${prefix}/plugin_description.xml"/> -->
+    <rviz_common plugin="${prefix}/plugin_description.xml"/> <!-- Correct export tag -->
   </export>
-</package> 
+</package>

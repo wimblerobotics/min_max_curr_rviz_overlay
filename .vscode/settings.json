@@ -57,6 +57,8 @@
         "unordered_map": "cpp",
         "unordered_set": "cpp",
         "vector": "cpp",
-        "forward_list": "cpp"
+        "forward_list": "cpp",
+        "qwidget": "cpp",
+        "qcolor": "cpp"
     }
 }
