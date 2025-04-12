@@ -9,11 +9,21 @@ endif()
 # Find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(sensor_msgs REQUIRED)
 find_package(rviz_common REQUIRED)
 find_package(rviz_ogre_vendor REQUIRED) # Needed for Ogre overlay classes
 find_package(pluginlib REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Core Widgets Gui) # Gui needed for QPainter/QImage
+find_package(rosidl_default_generators REQUIRED) # Added for message generation
+find_package(std_msgs REQUIRED) # Add find_package for std_msgs
+
+# Generate C++ code from the .msg file
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/MinMaxCurr.msg"
+  DEPENDENCIES std_msgs
+)
+
+# Get the C++ typesupport target name
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 # Enable Qt moc/uic/rcc
 set(CMAKE_AUTOMOC ON)
@@ -25,7 +35,7 @@ set(CMAKE_AUTOMOC_SEARCH_PATHS include src)
 
 # Add explicit MOC processing for our display class
 qt5_wrap_cpp(MOC_FILES
-  include/wifi_viz/battery_state_display.hpp
+  include/wifi_viz/wifi_state_display.hpp
 )
 
 # Force symbol visibility for exported classes
@@ -38,34 +48,37 @@ include_directories(
   ${rviz_ogre_vendor_INCLUDE_DIRS} # Add Ogre includes
 )
 
-# Add the library with the moc files
-add_library(${PROJECT_NAME} SHARED
-  src/battery_state_display.cpp
+# Add the library with a distinct name
+set(library_target ${PROJECT_NAME}_lib) # Define a new variable for the library target name
+add_library(${library_target} SHARED # Use the new variable here
+  src/wifi_state_display.cpp
+  # src/wifi_bar_visual.cpp # Uncomment if using this file
   ${MOC_FILES}
 )
 
-# Set visibility macros
-target_compile_definitions(${PROJECT_NAME} PRIVATE "RVIZ_DEFAULT_PLUGINS_BUILDING_LIBRARY")
+# Set visibility macros for the library target
+target_compile_definitions(${library_target} PRIVATE "RVIZ_DEFAULT_PLUGINS_BUILDING_LIBRARY") # Use ${library_target}
 
-# Add dependencies
-ament_target_dependencies(${PROJECT_NAME}
+# Add dependencies for the library target
+ament_target_dependencies(${library_target} # Use ${library_target}
   rclcpp
-  sensor_msgs
   rviz_common
-  rviz_ogre_vendor # Add Ogre dependency
+  rviz_ogre_vendor
   pluginlib
+  rosidl_default_runtime
 )
 
-# Link Qt and Ogre libraries
-target_link_libraries(${PROJECT_NAME}
+# Link Qt, Ogre, and the generated message typesupport library
+target_link_libraries(${library_target} # Use ${library_target}
   Qt5::Core
   Qt5::Widgets
   Qt5::Gui
-  ${rviz_ogre_vendor_LIBRARIES} # Link Ogre libraries
+  ${rviz_ogre_vendor_LIBRARIES}
+  ${cpp_typesupport_target}
 )
 
-# Export include directory
-target_include_directories(${PROJECT_NAME} PUBLIC
+# Export include directory for the library target
+target_include_directories(${library_target} PUBLIC # Use ${library_target}
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
@@ -73,9 +86,9 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 # Export the plugin
 pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)
 
-# Install the library
-install(TARGETS ${PROJECT_NAME}
-  EXPORT ${PROJECT_NAME}
+# Install the library target
+install(TARGETS ${library_target} # Use ${library_target}
+  EXPORT ${library_target}_export # Create export name based on library target
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -92,14 +105,17 @@ install(FILES plugin_description.xml
 )
 
 # Exports
-ament_export_targets(${PROJECT_NAME} HAS_LIBRARY_TARGET)
+# Export ONLY the library target's export set
+ament_export_targets(${library_target}_export HAS_LIBRARY_TARGET) # Use the export name matching install()
+# Export dependencies
 ament_export_dependencies(
   rclcpp
-  sensor_msgs
   rviz_common
-  rviz_ogre_vendor # Add Ogre dependency
+  rviz_ogre_vendor
   pluginlib
   Qt5
+  rosidl_default_runtime
+  std_msgs
 )
 
 ament_package()

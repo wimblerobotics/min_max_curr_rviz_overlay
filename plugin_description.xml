@@ -1,12 +1,13 @@
-<library path="libwifi_viz">
+<library path="wifi_viz_lib">
   <class
-    name="wifi_viz/BatteryStateDisplay"
-    type="wifi_viz::BatteryStateDisplay"
+    name="wifi_viz/WifiStateDisplay"
+    type="wifi_viz::WifiStateDisplay"
     base_class_type="rviz_common::Display">
     <description>
-      Displays sensor_msgs/BatteryState as a 2D bar graph overlay.
+      Displays wifi_viz/MinMaxCurr as a 2D bar graph overlay.
     </description>
-    <message_type>sensor_msgs/msg/BatteryState</message_type>
+    <!-- Ensure this matches the message type being published -->
+    <message_type>wifi_viz/msg/MinMaxCurr</message_type>
   </class>
 </library>
 

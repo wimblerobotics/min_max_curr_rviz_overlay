@@ -1,12 +1,12 @@
-#ifndef WIFI_VIZ__BATTERY_STATE_DISPLAY_HPP_
-#define WIFI_VIZ__BATTERY_STATE_DISPLAY_HPP_
+#ifndef WIFI_VIZ__WIFI_STATE_DISPLAY_HPP_ // Renamed include guard
+#define WIFI_VIZ__WIFI_STATE_DISPLAY_HPP_
 
 #include <memory>
 #include <string>
 
-#include <sensor_msgs/msg/battery_state.hpp>
+#include "wifi_viz/msg/min_max_curr.hpp"
 
-#include <rviz_common/ros_topic_display.hpp> // Change base class include
+#include <rviz_common/ros_topic_display.hpp>
 #include <rviz_common/properties/color_property.hpp>
 #include <rviz_common/properties/int_property.hpp>
 
@@ -29,13 +29,14 @@ class PanelOverlayElement;
 namespace wifi_viz
 {
 
-class BatteryStateDisplay : public rviz_common::RosTopicDisplay<sensor_msgs::msg::BatteryState>
+// Ensure the template argument matches the message type
+class WifiStateDisplay : public rviz_common::RosTopicDisplay<wifi_viz::msg::MinMaxCurr> // Renamed class
 {
   Q_OBJECT
 
 public:
-  BatteryStateDisplay();
-  ~BatteryStateDisplay() override;
+  WifiStateDisplay(); // Renamed constructor
+  ~WifiStateDisplay() override; // Renamed destructor
 
   // RViz Display overrides
   void onInitialize() override;
@@ -46,7 +47,7 @@ public:
 
 protected:
   // Message handling overrides
-  void processMessage(sensor_msgs::msg::BatteryState::ConstSharedPtr msg) override;
+  void processMessage(wifi_viz::msg::MinMaxCurr::ConstSharedPtr msg) override;
 
 private Q_SLOTS:
   // Update display based on property changes
@@ -82,11 +83,11 @@ private:
   bool needs_redraw_;    // Flag to trigger texture update
 
   // State
-  float current_voltage_;
-  const float min_voltage_ = 0.0f;  // Fixed range
-  const float max_voltage_ = 100.0f; // Fixed range
+  float current_value_;
+  float min_value_;
+  float max_value_;
 };
 
 } // namespace wifi_viz
 
-#endif // WIFI_VIZ__BATTERY_STATE_DISPLAY_HPP_
+#endif // WIFI_VIZ__WIFI_STATE_DISPLAY_HPP_ // Renamed include guard

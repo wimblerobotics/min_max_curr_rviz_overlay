@@ -3,25 +3,29 @@
 <package format="3">
   <name>wifi_viz</name>
   <version>0.1.0</version>
-  <description>An RViz display plugin for visualizing battery state as a bar graph overlay.</description>
+  <description>An RViz display plugin for visualizing custom data as a bar graph overlay.</description>
   <maintainer email="mike@wimblerobotics.com">ros</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <!-- <buildtool_depend>ament_cmake_ros</buildtool_depend> Redundant if ament_cmake is present -->
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
 
   <depend>rclcpp</depend>
-  <depend>sensor_msgs</depend>
   <depend>rviz_common</depend>
   <depend>rviz_ogre_vendor</depend>
   <depend>pluginlib</depend>
-  <depend>qtbase5-dev</depend> <!-- For Qt Gui/Widgets/Core -->
+  <depend>qtbase5-dev</depend>
+  <depend>std_msgs</depend>
+
+  <exec_depend>rosidl_default_runtime</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
   <export>
     <build_type>ament_cmake</build_type>
-    <rviz_common plugin="${prefix}/plugin_description.xml"/> <!-- Correct export tag -->
+    <rviz_common plugin="${prefix}/plugin_description.xml"/>
   </export>
 </package>
