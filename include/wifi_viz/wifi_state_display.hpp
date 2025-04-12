@@ -18,6 +18,7 @@
 // Qt headers for drawing
 #include <QColor>
 #include <QImage>
+#include <QFont> // <<< Add QFont include
 
 // Forward declarations for Ogre classes
 namespace Ogre
@@ -67,6 +68,8 @@ private:
   rviz_common::properties::IntProperty * left_property_; // Use 'left' instead of 'x'
   rviz_common::properties::IntProperty * top_property_;  // Use 'top' instead of 'y'
   rviz_common::properties::ColorProperty * frame_color_property_;
+  rviz_common::properties::ColorProperty * text_color_property_; // <<< Add text color property
+  rviz_common::properties::IntProperty * font_size_property_;   // <<< Add font size property
 
   // Ogre Overlay related members
   Ogre::Overlay * overlay_;
@@ -81,6 +84,10 @@ private:
   // Drawing members
   QImage texture_image_; // QImage used as a canvas
   bool needs_redraw_;    // Flag to trigger texture update
+  int text_height_;      // <<< Add variable to store calculated text height
+  int min_text_width_;   // <<< Add variable for min text width
+  int max_text_width_;   // <<< Add variable for max text width
+  int text_margin_;      // <<< Add variable for margin
 
   // State
   float current_value_;

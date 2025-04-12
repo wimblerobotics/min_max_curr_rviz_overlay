@@ -20,6 +20,7 @@
 #include <QColor>
 #include <QImage>
 #include <QPainter>
+#include <QFontMetrics> // Add QFontMetrics include
 
 // ROS Headers
 #include <rclcpp/rclcpp.hpp>
@@ -41,7 +42,11 @@ WifiStateDisplay::WifiStateDisplay()
   needs_redraw_(false),
   current_value_(0.0f),
   min_value_(0.0f),
-  max_value_(100.0f)
+  max_value_(100.0f),
+  text_height_(0),
+  min_text_width_(0), // Initialize
+  max_text_width_(0), // Initialize
+  text_margin_(5)     // Initialize margin
 {
   static int instance_count = 0;
   instance_count++;
@@ -74,6 +79,16 @@ WifiStateDisplay::WifiStateDisplay()
   frame_color_property_ = new rviz_common::properties::ColorProperty(
     "Frame Color", QColor(255, 255, 255), "Color of the bar's frame.",
     this, SLOT(updateProperties()), this);
+
+  // Initialize new properties
+  text_color_property_ = new rviz_common::properties::ColorProperty(
+    "Text Color", QColor(255, 255, 255), "Color of the text labels.",
+    this, SLOT(updateProperties()), this);
+
+  font_size_property_ = new rviz_common::properties::IntProperty(
+    "Font Size", 12, "Font size for the text labels.",
+    this, SLOT(updateProperties()), this);
+  font_size_property_->setMin(5);
 }
 
 WifiStateDisplay::~WifiStateDisplay()
@@ -206,28 +221,50 @@ void WifiStateDisplay::updateProperties()
     return;
   }
 
-  int width = width_property_->getInt();
-  int height = height_property_->getInt();
+  int bar_width = width_property_->getInt(); // This property now controls only the bar width
+  int bar_height = height_property_->getInt();
   int left = left_property_->getInt();
   int top = top_property_->getInt();
+  int font_size = font_size_property_->getInt();
+
+  // --- Calculate Text Dimensions ---
+  QFont font = QFont();
+  font.setPointSize(font_size);
+  QFontMetrics fm(font);
+  // Estimate max width needed for "XXX.X" format
+  int estimated_text_width = fm.horizontalAdvance(QString("-999.9"));
+  min_text_width_ = estimated_text_width;
+  max_text_width_ = estimated_text_width;
+  text_height_ = fm.height() + 4; // Height for topic text below bar
+
+  // --- Calculate Total Dimensions ---
+  int total_width = min_text_width_ + bar_width + max_text_width_ + 2 * text_margin_;
+  int total_height = bar_height + text_height_; // Bar height + topic text height
 
   try {
-    panel_->setDimensions(static_cast<Ogre::Real>(width), static_cast<Ogre::Real>(height));
+    // Use total dimensions for panel
+    panel_->setDimensions(static_cast<Ogre::Real>(total_width), static_cast<Ogre::Real>(total_height));
     panel_->setPosition(static_cast<Ogre::Real>(left), static_cast<Ogre::Real>(top));
   } catch (Ogre::Exception& e) {
       RVIZ_COMMON_LOG_ERROR_STREAM("Error setting panel dimensions/position: " << e.getDescription());
       return;
   }
 
-  if (!texture_ || texture_->getWidth() != (unsigned int)width || texture_->getHeight() != (unsigned int)height) {
-    createTexture();
+  // Check if texture needs recreation due to size change
+  bool size_changed = (!texture_ ||
+                       texture_->getWidth() != (unsigned int)total_width ||
+                       texture_->getHeight() != (unsigned int)total_height);
+
+  if (size_changed) {
+    createTexture(); // createTexture will now use total dimensions
   } else {
-    needs_redraw_ = true;
+    needs_redraw_ = true; // Trigger redraw if only color/font/position properties changed
   }
 
   RVIZ_COMMON_LOG_DEBUG_STREAM(
     "WifiStateDisplay: Updated properties: pos=(" << left << "," << top <<
-      "), size=(" << width << "," << height << ")");
+      "), total_size=(" << total_width << "," << total_height << ")" <<
+      ", bar_width=" << bar_width);
 }
 
 void WifiStateDisplay::createTexture()
@@ -239,10 +276,22 @@ void WifiStateDisplay::createTexture()
       return;
   }
 
-  int width = width_property_->getInt();
-  int height = height_property_->getInt();
+  // --- Get Total Dimensions (Recalculate based on current properties) ---
+  int bar_width = width_property_->getInt();
+  int bar_height = height_property_->getInt();
+  // Recalculate text dimensions needed for total size
+  QFont font = QFont();
+  font.setPointSize(font_size_property_->getInt());
+  QFontMetrics fm(font);
+  int estimated_text_width = fm.horizontalAdvance(QString("-999.9"));
+  min_text_width_ = estimated_text_width;
+  max_text_width_ = estimated_text_width;
+  text_height_ = fm.height() + 4;
+  // Calculate total size
+  int total_width = min_text_width_ + bar_width + max_text_width_ + 2 * text_margin_;
+  int total_height = bar_height + text_height_;
 
-  if (width <= 0 || height <= 0) {
+  if (total_width <= 0 || total_height <= 0) {
     RVIZ_COMMON_LOG_WARNING("WifiStateDisplay: Invalid dimensions, cannot create texture.");
     return;
   }
@@ -253,11 +302,12 @@ void WifiStateDisplay::createTexture()
     }
     texture_.reset();
 
+    // Create texture with total dimensions
     texture_ = Ogre::TextureManager::getSingleton().createManual(
       texture_name_,
       Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
       Ogre::TEX_TYPE_2D,
-      width, height, 0, Ogre::PF_A8R8G8B8,
+      total_width, total_height, 0, Ogre::PF_A8R8G8B8,
       Ogre::TU_DYNAMIC_WRITE_ONLY_DISCARDABLE);
 
     Ogre::Pass * pass = material_->getTechnique(0)->getPass(0);
@@ -268,7 +318,8 @@ void WifiStateDisplay::createTexture()
     }
     pass->getTextureUnitState(0)->setTextureFiltering(Ogre::TFO_NONE);
 
-    texture_image_ = QImage(width, height, QImage::Format_ARGB32);
+    // Resize QImage with total dimensions
+    texture_image_ = QImage(total_width, total_height, QImage::Format_ARGB32);
     needs_redraw_ = true;
 
     RVIZ_COMMON_LOG_DEBUG_STREAM("WifiStateDisplay: Created/Recreated texture " << texture_name_);
@@ -291,22 +342,48 @@ void WifiStateDisplay::updateOverlayTexture()
   QPainter painter(&texture_image_);
   painter.setRenderHint(QPainter::Antialiasing, true);
 
-  QColor frame_color = frame_color_property_->getColor();
-  int width = texture_image_.width();
-  int height = texture_image_.height();
+  // --- Get Properties ---
+  QColor text_color = text_color_property_->getColor();
+  int font_size = font_size_property_->getInt();
+  QFont font = painter.font();
+  font.setPointSize(font_size);
+  painter.setFont(font);
 
+  QColor frame_color = frame_color_property_->getColor();
+  int bar_width_prop = width_property_->getInt(); // Width of the bar itself
+  int bar_height = height_property_->getInt();
+  int total_texture_width = texture_image_.width();
+
+  // --- Define Drawing Areas ---
+  QRect min_text_rect(0, 0, min_text_width_, bar_height);
+  QRect bar_rect(min_text_width_ + text_margin_, 0, bar_width_prop, bar_height);
+  QRect max_text_rect(bar_rect.right() + text_margin_, 0, max_text_width_, bar_height);
+  QRect topic_text_rect(0, bar_height, total_texture_width, text_height_);
+
+  // --- Draw Min/Max Text ---
+  painter.setPen(text_color);
+  QString min_text = QString::number(min_value_, 'f', 1);
+  painter.drawText(min_text_rect, Qt::AlignRight | Qt::AlignVCenter, min_text);
+  QString max_text = QString::number(max_value_, 'f', 1);
+  painter.drawText(max_text_rect, Qt::AlignLeft | Qt::AlignVCenter, max_text);
+
+  // --- Draw Bar Graph (within bar_rect) ---
   float value_range = max_value_ - min_value_;
   float clamped_value = std::max(min_value_, std::min(max_value_, current_value_));
   float percentage = (value_range > 1e-6) ? (clamped_value - min_value_) / value_range : 0.0f;
 
   int frame_thickness = 2;
-  int available_width = width - 2 * frame_thickness;
-  int bar_width = std::max(0, static_cast<int>(available_width * percentage));
+  int available_width = bar_rect.width() - 2 * frame_thickness; // Width inside the frame
+  int bar_fill_width = std::max(0, static_cast<int>(available_width * percentage));
 
   painter.setPen(QPen(frame_color, frame_thickness));
   painter.setBrush(Qt::transparent);
-  painter.drawRect(frame_thickness / 2, frame_thickness / 2,
-                   width - frame_thickness, height - frame_thickness);
+  QRectF frame_draw_rect(
+      bar_rect.left() + frame_thickness / 2.0,
+      bar_rect.top() + frame_thickness / 2.0,
+      bar_rect.width() - frame_thickness,
+      bar_rect.height() - frame_thickness);
+  painter.drawRect(frame_draw_rect);
 
   QColor bar_color;
   if (percentage < 0.5f) {
@@ -315,11 +392,29 @@ void WifiStateDisplay::updateOverlayTexture()
     bar_color = QColor::fromRgbF(1.0 - (percentage - 0.5) * 2.0, 1.0, 0.0);
   }
 
-  if (bar_width > 0) {
+  if (bar_fill_width > 0) {
       painter.setPen(Qt::NoPen);
       painter.setBrush(bar_color);
-      painter.drawRect(frame_thickness, frame_thickness,
-                       bar_width, height - 2 * frame_thickness);
+      QRect bar_fill_rect(
+          bar_rect.left() + frame_thickness,
+          bar_rect.top() + frame_thickness,
+          bar_fill_width,
+          bar_rect.height() - 2 * frame_thickness);
+      painter.drawRect(bar_fill_rect);
+  }
+
+  // --- Draw Current Value Text (Centered in Bar Rect) ---
+  painter.setPen(text_color);
+  QString current_text = QString::number(current_value_, 'f', 1);
+  painter.drawText(bar_rect, Qt::AlignCenter, current_text);
+
+  // --- Draw Topic Text ---
+  painter.setPen(text_color);
+  QString topic_text = QString::fromStdString(topic_property_->getTopicStd());
+  if (!topic_text.isEmpty()) {
+      painter.drawText(topic_text_rect.adjusted(0, 2, 0, -2),
+                       Qt::AlignCenter | Qt::AlignTop,
+                       topic_text);
   }
 
   painter.end();
@@ -334,7 +429,7 @@ void WifiStateDisplay::updateOverlayTexture()
     if (ogre_bytes_per_line == static_cast<size_t>(texture_image_.bytesPerLine())) {
       memcpy(pDest, texture_image_.constBits(), texture_image_.sizeInBytes());
     } else {
-      for (int y = 0; y < height; ++y) {
+      for (int y = 0; y < texture_image_.height(); ++y) {
         memcpy(
           pDest + y * ogre_bytes_per_line,
           texture_image_.constScanLine(y),
