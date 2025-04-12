@@ -97,6 +97,28 @@ WifiStateDisplay::WifiStateDisplay()
 
 WifiStateDisplay::~WifiStateDisplay()
 {
+  // Clean up Ogre resources
+  try {
+    if (overlay_) {
+      Ogre::OverlayManager::getSingleton().destroy(overlay_name_);
+      overlay_ = nullptr; // Set pointer to null after destruction
+      panel_ = nullptr; // Panel is destroyed with overlay
+    }
+    if (Ogre::MaterialManager::getSingleton().resourceExists(material_name_)) {
+      Ogre::MaterialManager::getSingleton().remove(material_name_);
+    }
+    // TexturePtr will handle its own deletion via reference counting,
+    // but explicitly removing ensures it's gone if needed.
+    if (texture_ && Ogre::TextureManager::getSingleton().resourceExists(texture_name_)) {
+       Ogre::TextureManager::getSingleton().remove(texture_name_);
+    }
+    texture_.reset(); // Release smart pointer reference
+    material_.reset(); // Release smart pointer reference
+
+  } catch (Ogre::Exception& e) {
+    RVIZ_COMMON_LOG_ERROR_STREAM("Error destroying Ogre overlay resources: " << e.getDescription());
+  }
+  // Base class destructor will handle property cleanup
 }
 
 void WifiStateDisplay::onInitialize()
