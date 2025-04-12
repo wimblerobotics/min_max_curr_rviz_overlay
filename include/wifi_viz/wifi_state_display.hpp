@@ -9,6 +9,7 @@
 #include <rviz_common/ros_topic_display.hpp>
 #include <rviz_common/properties/color_property.hpp>
 #include <rviz_common/properties/int_property.hpp>
+#include <rviz_common/properties/bool_property.hpp> // <<< Add BoolProperty include
 
 // Ogre-specific headers
 #include <OgreColourValue.h>
@@ -70,6 +71,7 @@ private:
   rviz_common::properties::ColorProperty * frame_color_property_;
   rviz_common::properties::ColorProperty * text_color_property_; // <<< Add text color property
   rviz_common::properties::IntProperty * font_size_property_;   // <<< Add font size property
+  rviz_common::properties::BoolProperty * vertical_mode_property_; // <<< Add orientation property
 
   // Ogre Overlay related members
   Ogre::Overlay * overlay_;
