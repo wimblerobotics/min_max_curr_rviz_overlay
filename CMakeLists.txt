@@ -104,6 +104,12 @@ install(FILES plugin_description.xml
   DESTINATION share/${PROJECT_NAME}
 )
 
+# Install Python scripts
+install(PROGRAMS
+  src/battery_to_minmax_publisher.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 # Exports
 # Export ONLY the library target's export set
 ament_export_targets(${library_target}_export HAS_LIBRARY_TARGET) # Use the export name matching install()
