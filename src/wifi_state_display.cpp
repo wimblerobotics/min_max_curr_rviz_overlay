@@ -424,6 +424,7 @@ void WifiStateDisplay::updateOverlayTexture()
   float percentage = 0.0f;
   int frame_thickness = 2;
   QString title_text = "";
+  uint8_t display_precision = 1; // Default precision
 
   // --- Determine Critical State and Background ---
   QColor background_color = Qt::transparent; // Default background
@@ -459,6 +460,7 @@ void WifiStateDisplay::updateOverlayTexture()
       // else ANIMATION_NONE: background remains transparent (or default)
     }
     // else not critical: background remains transparent (or default)
+    display_precision = last_msg_->precision; // Get precision from message
   } else {
     // If no message, don't draw content
     draw_content = false;
@@ -512,8 +514,8 @@ void WifiStateDisplay::updateOverlayTexture()
 
       // --- Draw Rotated Min/Max Text ---
       painter.setPen(text_color);
-      QString max_text = QString::number(last_msg_->max, 'f', 1);
-      QString min_text = QString::number(last_msg_->min, 'f', 1);
+      QString max_text = QString::number(last_msg_->max, 'f', display_precision); // Use precision
+      QString min_text = QString::number(last_msg_->min, 'f', display_precision); // Use precision
 
       // Draw Max Text (Rotated -90 deg, centered above bar)
       painter.save();
@@ -572,7 +574,7 @@ void WifiStateDisplay::updateOverlayTexture()
 
       // --- Draw Rotated Current Value Text (Centered in Bar Rect) ---
       painter.setPen(text_color);
-      QString current_text = QString::number(last_msg_->current, 'f', 2); // Change precision to 2
+      QString current_text = QString::number(last_msg_->current, 'f', display_precision); // Use precision
       painter.save();
       painter.translate(bar_rect.center());
       painter.rotate(-90);
@@ -602,9 +604,9 @@ void WifiStateDisplay::updateOverlayTexture()
       QRect topic_text_rect(0, bar_height, total_texture_width, text_height_);
 
       // Draw Min/Max Text
-      QString min_text = QString::number(last_msg_->min, 'f', 1);
+      QString min_text = QString::number(last_msg_->min, 'f', display_precision); // Use precision
       painter.drawText(min_text_rect, Qt::AlignRight | Qt::AlignVCenter, min_text);
-      QString max_text = QString::number(last_msg_->max, 'f', 1);
+      QString max_text = QString::number(last_msg_->max, 'f', display_precision); // Use precision
       painter.drawText(max_text_rect, Qt::AlignLeft | Qt::AlignVCenter, max_text);
 
       // Draw Bar Graph
@@ -648,7 +650,7 @@ void WifiStateDisplay::updateOverlayTexture()
 
       // Draw Current Value Text
       painter.setPen(text_color);
-      QString current_text = QString::number(last_msg_->current, 'f', 2); // Change precision to 2
+      QString current_text = QString::number(last_msg_->current, 'f', display_precision); // Use precision
       painter.drawText(bar_rect, Qt::AlignCenter, current_text);
 
       // Draw Topic Text (Using title from message if available, else topic property)

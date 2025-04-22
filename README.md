@@ -77,9 +77,9 @@ ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
 }'
 ```
 
-**Example 2: Critical (Under Threshold), Colorize Animation, Purple Critical Color, Green Current Color**
+**Example 2: Critical (Under Threshold), Colorize Animation, Purple Critical Color, Green Current Color, Precision 2**
 
-Value (0.15) is below critical (0.25). Animation is COLORIZE, so the background will turn purple. The bar itself will be green.
+Value (0.15) is below critical (0.25). Animation is COLORIZE, so the background will turn purple. The bar itself will be green. Values will be displayed with 2 decimal places.
 
 ~![Example 1](media/overlay_example2.png)
 
@@ -95,7 +95,8 @@ ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
   title: "Battery %",
   compact: false,
   current_color: {r: 0.0, g: 1.0, b: 0.0, a: 1.0}, # Green
-  critical_color: {r: 0.5, g: 0.0, b: 0.5, a: 1.0}  # Purple
+  critical_color: {r: 0.5, g: 0.0, b: 0.5, a: 1.0},  # Purple
+  precision: 2
 }'
 ```
 
@@ -134,3 +135,4 @@ ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
 *   `compact` (bool): (Not currently implemented in this version) Intended for a more compact display.
 *   `current_color` (std_msgs/ColorRGBA): Color used to draw the fill of the bar representing the current value. Alpha > 0 is required to override the default green/yellow/red gradient.
 *   `critical_color` (std_msgs/ColorRGBA): Color used for the background during COLORIZE or FLASH animations when in a critical state.
+*   `precision` (uint8): Number of decimal places to display for the min, max, and current values (default: 1).
