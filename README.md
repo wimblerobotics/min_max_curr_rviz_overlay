@@ -2,6 +2,23 @@
 
 This package provides an RViz display plugin that visualizes a numerical value relative to its minimum and maximum bounds, often presented as a horizontal or vertical bar. It includes features to indicate critical states through color changes or flashing animations.
 
+## Features
+
+*   Displays a value bar with current, min, and max labels.
+*   Configurable position, size, colors, and font size via RViz properties panel.
+*   Optional title override via the message.
+*   Optional custom color for the bar fill via the message.
+*   Optional critical state indication:
+    *   Define a threshold (`critical_value`).
+    *   Specify whether being *under* or *over* the threshold is critical (`critical_if_under`).
+    *   Choose an animation type (`critical_animation_type`):
+        *   `ANIMATION_NONE`: No visual change.
+        *   `ANIMATION_COLORIZE`: Fill the display background with `critical_color`.
+        *   `ANIMATION_FLASH`: Flash the display background with `critical_color`.
+*   Configurable numeric precision for displayed values (`precision`).
+*   Supports both horizontal and vertical bar orientation.
+*   Optional compact layout (`compact`) to arrange elements differently (e.g., title beside bar).
+
 ## Installation
 
 1.  **Clone the Repository:**
@@ -81,7 +98,7 @@ ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
 
 Value (0.15) is below critical (0.25). Animation is COLORIZE, so the background will turn purple. The bar itself will be green. Values will be displayed with 2 decimal places.
 
-~![Example 1](media/overlay_example2.png)
+~![Example 2](media/overlay_example2.png)
 
 ```bash
 ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
@@ -100,11 +117,34 @@ ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
 }'
 ```
 
-**Example 3: Critical (Under Threshold), Flash Animation, Blue Critical Color, Yellow Current Color**
+**Example 3: Compact Layout, Critical (Under Threshold), Colorize Animation, Purple Critical Color, Green Current Color, Precision 2**
+
+Same as Example 2, but with `compact: true`. In horizontal mode, the title moves to the left of the min value.
+
+~![Example 3](media/overlay_compact.png)
+
+```bash
+ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
+  min: 0.0,
+  max: 1.0,
+  current: 0.15,
+  critical_value: 0.25,
+  critical_if_under: true,
+  critical_animation_type: 1, # ANIMATION_COLORIZE
+  critical_python_function: "",
+  title: "Battery %",
+  compact: true, # Enable compact layout
+  current_color: {r: 0.0, g: 1.0, b: 0.0, a: 1.0}, # Green
+  critical_color: {r: 0.5, g: 0.0, b: 0.5, a: 1.0},  # Purple
+  precision: 2
+}'
+```
+
+**Example 4: Critical (Under Threshold), Flash Animation, Blue Critical Color, Yellow Current Color**
 
 Value (0.15) is below critical (0.25). Animation is FLASH, so the background will flash using the blue critical color. The bar itself will be yellow.
 
-~![Example 1](media/overlay_example3.png)
+~![Example 4](media/overlay_example3.png)
 
 ```bash
 ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
@@ -131,8 +171,8 @@ ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
 *   `critical_if_under` (bool): If true, the state is critical when `current < critical_value`. If false, critical when `current > critical_value`.
 *   `critical_animation_type` (uint8): Type of animation for critical state (0: None, 1: Colorize Background, 2: Flash Background).
 *   `critical_python_function` (string): (Not currently used by this C++ display) Path to a Python function for custom critical logic.
-*   `title` (string): Optional title displayed below/beside the bar. If empty, the topic name is used.
-*   `compact` (bool): (Not currently implemented in this version) Intended for a more compact display.
+*   `title` (string): Optional title displayed. Position depends on `compact` flag and orientation. If empty, the topic name is used.
+*   `compact` (bool): If true, uses a more compact layout (e.g., title beside bar in horizontal mode). If false, uses the default layout (e.g., title below bar in horizontal mode).
 *   `current_color` (std_msgs/ColorRGBA): Color used to draw the fill of the bar representing the current value. Alpha > 0 is required to override the default green/yellow/red gradient.
 *   `critical_color` (std_msgs/ColorRGBA): Color used for the background during COLORIZE or FLASH animations when in a critical state.
 *   `precision` (uint8): Number of decimal places to display for the min, max, and current values (default: 1).

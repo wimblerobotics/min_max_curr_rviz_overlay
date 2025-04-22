@@ -44,6 +44,7 @@ WifiStateDisplay::WifiStateDisplay()
   text_height_(0),
   min_text_width_(0), // Initialize
   max_text_width_(0), // Initialize
+  topic_text_width_(0), // Initialize topic text width
   text_margin_(5),    // Initialize margin
   show_critical_flash_(true) // Initialize flash state
 {
@@ -251,10 +252,96 @@ void WifiStateDisplay::reset()
 
 void WifiStateDisplay::processMessage(wifi_viz::msg::MinMaxCurr::ConstSharedPtr msg)
 {
+  // Check if layout-affecting properties changed (compact or title)
+  // Also check if it's the first message
+  bool layout_changed = !last_msg_ ||
+                        last_msg_->compact != msg->compact ||
+                        (last_msg_->title.empty() && !msg->title.empty() && topic_property_->getTopicStd().empty()) || // Gained a title when none existed (and no topic fallback)
+                        (!last_msg_->title.empty() && last_msg_->title != msg->title) || // Title changed
+                        (last_msg_->title.empty() && msg->title.empty() && !topic_property_->getTopicStd().empty() && topic_text_width_ == 0); // No title, but topic exists and width wasn't calculated yet
+
   last_msg_ = msg; // Store the entire message
 
-  needs_redraw_ = true;
+  // If layout changed, force property update which recalculates dimensions and texture
+  if (layout_changed) {
+      updateProperties(); // This will trigger texture recreation if needed via size check
+  } else {
+      needs_redraw_ = true; // Otherwise, just redraw with existing texture size
+  }
 }
+
+
+// Helper function to calculate dimensions based on properties and message
+void WifiStateDisplay::calculateDimensions(
+    int& total_width, int& total_height,
+    int& bar_width, int& bar_height,
+    int& min_text_w, int& max_text_w, int& topic_text_w, int& text_h)
+{
+    bool vertical_mode = vertical_mode_property_->getBool();
+    int prop_width = width_property_->getInt();
+    int prop_height = height_property_->getInt();
+    int font_size = font_size_property_->getInt();
+    // Use last message for compact flag and title, default to false/empty if no message yet
+    bool compact_mode = last_msg_ ? last_msg_->compact : false;
+    uint8_t precision = last_msg_ ? last_msg_->precision : 1;
+    QString title_str = last_msg_ ? QString::fromStdString(last_msg_->title) : "";
+    if (title_str.isEmpty() && topic_property_) { // Check topic_property_ validity
+        title_str = QString::fromStdString(topic_property_->getTopicStd());
+    }
+
+    QFont font = QFont();
+    font.setPointSize(font_size);
+    QFontMetrics fm(font);
+
+    // Calculate base text dimensions using precision for better estimate
+    QString sample_num_str = QString::number(123.456, 'f', precision); // Sample number
+    min_text_w = fm.horizontalAdvance(sample_num_str);
+    max_text_w = min_text_w;
+    text_h = fm.height() + 4; // Basic text height
+
+    // Calculate actual topic text width
+    topic_text_w = fm.horizontalAdvance(title_str);
+
+    // Calculate Bar and Total Dimensions based on Orientation and Compact mode
+    if (vertical_mode) {
+        bar_width = prop_height; // Height property controls width in vertical mode
+        bar_height = prop_width; // Width property controls height in vertical mode
+
+        if (compact_mode) {
+            // Compact Vertical: Title (top, horizontal), Max (rot), Bar, Min (rot)
+            // Width determined by the wider of the bar or the title
+            total_width = std::max(bar_width, topic_text_w + 2 * text_margin_);
+            // Height: Title + Max(rot) + Bar + Min(rot) + margins
+            total_height = text_h + max_text_w + bar_height + min_text_w + 3 * text_margin_;
+        } else {
+            // Non-Compact Vertical: [Max(rot), Bar, Min(rot)] | [Title(rot)]
+            // Total width: Bar width + space for rotated topic text + margin
+            total_width = bar_width + text_h + text_margin_; // text_h is rotated topic text width
+            // Total height: Max height of (Bar + rotated Min/Max) or rotated Title
+            total_height = std::max(bar_height + max_text_w + min_text_w + 2 * text_margin_, topic_text_w);
+        }
+    } else { // Horizontal mode
+        bar_width = prop_width;
+        bar_height = prop_height;
+
+        if (compact_mode) {
+            // Compact Horizontal: [Title][Min][Bar][Max]
+            total_width = topic_text_w + min_text_w + bar_width + max_text_w + 3 * text_margin_;
+            // Height determined by the taller of the bar or the text
+            total_height = std::max(bar_height, text_h);
+        } else {
+            // Non-Compact Horizontal: [Min][Bar][Max] (top row) / [Title] (bottom row)
+            // Width determined by top row
+            total_width = min_text_w + bar_width + max_text_w + 2 * text_margin_;
+            // Height: Bar row + Title row
+            total_height = bar_height + text_h;
+        }
+    }
+    // Ensure minimum dimensions
+    total_width = std::max(10, total_width);
+    total_height = std::max(10, total_height);
+}
+
 
 void WifiStateDisplay::updateProperties()
 {
@@ -265,64 +352,38 @@ void WifiStateDisplay::updateProperties()
     return;
   }
 
-  // --- Get Properties ---
-  bool vertical_mode = vertical_mode_property_->getBool();
-  int prop_width = width_property_->getInt();   // Meaning depends on mode
-  int prop_height = height_property_->getInt(); // Meaning depends on mode
-  int left = left_property_->getInt();
-  int top = top_property_->getInt();
-  int font_size = font_size_property_->getInt();
+  // --- Calculate Dimensions using helper ---
+  int total_width, total_height, bar_width, bar_height;
+  // Use the helper function to get all dimensions based on current props and last_msg_
+  calculateDimensions(total_width, total_height, bar_width, bar_height,
+                      min_text_width_, max_text_width_, topic_text_width_, text_height_);
 
-  // --- Calculate Text Dimensions (Independent of orientation) ---
-  QFont font = QFont();
-  font.setPointSize(font_size);
-  QFontMetrics fm(font);
-  int estimated_text_width = fm.horizontalAdvance(QString("-999.9")); // Width for min/max
-  min_text_width_ = estimated_text_width;
-  max_text_width_ = estimated_text_width;
-  text_height_ = fm.height() + 4; // Height for topic text (if horizontal) or width (if vertical)
-
-  // --- Calculate Bar and Total Dimensions based on Orientation ---
-  int bar_width, bar_height, total_width, total_height;
-
-  if (vertical_mode) {
-    bar_width = prop_height; // Height property controls width in vertical mode
-    bar_height = prop_width; // Width property controls height in vertical mode
-    // Total width: Bar width + space for rotated topic text
-    total_width = bar_width + text_height_; // text_height_ is topic text height (now width)
-    // Total height: Bar height + space for min/max text above/below
-    total_height = bar_height + min_text_width_ + max_text_width_ + 2 * text_margin_; // Using text width as height
-  } else {
-    // Horizontal mode (as before)
-    bar_width = prop_width;
-    bar_height = prop_height;
-    total_width = min_text_width_ + bar_width + max_text_width_ + 2 * text_margin_;
-    total_height = bar_height + text_height_;
-  }
 
   // --- Update Panel ---
   try {
     panel_->setDimensions(static_cast<Ogre::Real>(total_width), static_cast<Ogre::Real>(total_height));
-    panel_->setPosition(static_cast<Ogre::Real>(left), static_cast<Ogre::Real>(top));
+    panel_->setPosition(static_cast<Ogre::Real>(left_property_->getInt()), static_cast<Ogre::Real>(top_property_->getInt()));
   } catch (Ogre::Exception& e) {
       RVIZ_COMMON_LOG_ERROR_STREAM("Error setting panel dimensions/position: " << e.getDescription());
       return;
   }
 
   // --- Check if Texture Recreation Needed ---
+  // Texture might be null if creation failed before
   bool size_changed = (!texture_ ||
                        texture_->getWidth() != (unsigned int)total_width ||
                        texture_->getHeight() != (unsigned int)total_height);
 
   if (size_changed) {
-    createTexture();
+    createTexture(); // This will also set needs_redraw_
   } else {
-    needs_redraw_ = true;
+    needs_redraw_ = true; // Trigger redraw if only properties like color changed, or if layout changed but size didn't
   }
 
   RVIZ_COMMON_LOG_DEBUG_STREAM(
-    "WifiStateDisplay: Updated properties: mode=" << (vertical_mode ? "Vertical" : "Horizontal") <<
-      ", pos=(" << left << "," << top <<
+    "WifiStateDisplay: Updated properties: mode=" << (vertical_mode_property_->getBool() ? "Vertical" : "Horizontal") <<
+      ", compact=" << (last_msg_ ? last_msg_->compact : false) <<
+      ", pos=(" << left_property_->getInt() << "," << top_property_->getInt() <<
       "), total_size=(" << total_width << "," << total_height << ")" <<
       ", bar_size=(" << bar_width << "," << bar_height << ")");
 }
@@ -336,361 +397,448 @@ void WifiStateDisplay::createTexture()
       return;
   }
 
-  // --- Recalculate Total Dimensions based on current properties ---
-  bool vertical_mode = vertical_mode_property_->getBool();
-  int prop_width = width_property_->getInt();
-  int prop_height = height_property_->getInt();
-  QFont font = QFont();
-  font.setPointSize(font_size_property_->getInt());
-  QFontMetrics fm(font);
-  int estimated_text_width = fm.horizontalAdvance(QString("-999.9"));
-  min_text_width_ = estimated_text_width;
-  max_text_width_ = estimated_text_width;
-  text_height_ = fm.height() + 4;
+  // --- Recalculate Total Dimensions using helper ---
+  int total_width, total_height, bar_width, bar_height;
+  // Use the helper function - recalculates based on current props and last_msg_
+  calculateDimensions(total_width, total_height, bar_width, bar_height,
+                      min_text_width_, max_text_width_, topic_text_width_, text_height_);
 
-  int bar_width, bar_height, total_width, total_height;
-  if (vertical_mode) {
-    bar_width = prop_height;
-    bar_height = prop_width;
-    total_width = bar_width + text_height_;
-    total_height = bar_height + min_text_width_ + max_text_width_ + 2 * text_margin_;
-  } else {
-    bar_width = prop_width;
-    bar_height = prop_height;
-    total_width = min_text_width_ + bar_width + max_text_width_ + 2 * text_margin_;
-    total_height = bar_height + text_height_;
-  }
-  // --- End Recalculation ---
-
-  if (total_width <= 0 || total_height <= 0) {
-    RVIZ_COMMON_LOG_WARNING("WifiStateDisplay: Invalid dimensions, cannot create texture.");
-    return;
-  }
+  // Note: calculateDimensions already ensures minimum 10x10 size.
 
   try {
+    // Remove existing texture if it exists
     if (texture_ && Ogre::TextureManager::getSingleton().resourceExists(texture_name_)) {
         Ogre::TextureManager::getSingleton().remove(texture_name_);
     }
-    texture_.reset();
+    texture_.reset(); // Release smart pointer reference
 
-    // Create texture with total dimensions
+    // Create texture with calculated dimensions
     texture_ = Ogre::TextureManager::getSingleton().createManual(
       texture_name_,
       Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
       Ogre::TEX_TYPE_2D,
-      total_width, total_height, 0, Ogre::PF_A8R8G8B8,
+      total_width, total_height, 0, Ogre::PF_A8R8G8B8, // Pixel format ARGB
       Ogre::TU_DYNAMIC_WRITE_ONLY_DISCARDABLE);
 
+    // Ensure material has a technique and pass
+     if (material_->getNumTechniques() == 0) {
+         Ogre::Technique *tech = material_->createTechnique();
+         tech->createPass();
+     } else if (material_->getTechnique(0)->getNumPasses() == 0) {
+         material_->getTechnique(0)->createPass();
+     }
+
     Ogre::Pass * pass = material_->getTechnique(0)->getPass(0);
-    if (pass->getNumTextureUnitStates() > 0) {
-      pass->getTextureUnitState(0)->setTexture(texture_);
-    } else {
-      pass->createTextureUnitState(texture_name_);
-    }
-    pass->getTextureUnitState(0)->setTextureFiltering(Ogre::TFO_NONE);
+    // Remove existing texture unit states to avoid conflicts
+    pass->removeAllTextureUnitStates();
+    // Create new texture unit state for our texture
+    Ogre::TextureUnitState* tex_unit = pass->createTextureUnitState(texture_name_);
+    tex_unit->setTextureFiltering(Ogre::TFO_NONE); // No filtering
+    // Set up blending for transparency
+    tex_unit->setColourOperationEx(Ogre::LBX_MODULATE, Ogre::LBS_TEXTURE, Ogre::LBS_CURRENT); // Modulate with vertex color
+    tex_unit->setAlphaOperation(Ogre::LBX_MODULATE, Ogre::LBS_TEXTURE, Ogre::LBS_CURRENT); // Modulate alpha
 
-    // Resize QImage with total dimensions
+    pass->setSceneBlending(Ogre::SBT_TRANSPARENT_ALPHA);
+    pass->setDepthWriteEnabled(false);
+    pass->setDepthCheckEnabled(false);
+    pass->setLightingEnabled(false); // No lighting needed
+    pass->setCullingMode(Ogre::CULL_NONE); // No culling
+
+    // Resize QImage buffer
     texture_image_ = QImage(total_width, total_height, QImage::Format_ARGB32);
-    needs_redraw_ = true;
+    texture_image_.fill(Qt::transparent); // Initialize with transparency
 
-    RVIZ_COMMON_LOG_DEBUG_STREAM("WifiStateDisplay: Created/Recreated texture " << texture_name_);
+    needs_redraw_ = true; // Mark for redraw
+
+    RVIZ_COMMON_LOG_DEBUG_STREAM("WifiStateDisplay: Created/Recreated texture " << texture_name_ << " with size " << total_width << "x" << total_height);
 
   } catch (Ogre::Exception& e) {
       RVIZ_COMMON_LOG_ERROR_STREAM("Error creating/recreating Ogre texture: " << e.getDescription());
       texture_.reset();
+      texture_image_ = QImage(); // Reset QImage as well
   }
 }
 
 void WifiStateDisplay::updateOverlayTexture()
 {
-  if (!texture_ || texture_image_.isNull()) {
-    RVIZ_COMMON_LOG_WARNING("WifiStateDisplay: Texture or QImage not ready, skipping redraw.");
+  if (!texture_ || texture_image_.isNull() || !last_msg_) { // Also check last_msg_ here
+    // Don't log warning if simply no message received yet
+    if (last_msg_) {
+        RVIZ_COMMON_LOG_WARNING("WifiStateDisplay: Texture or QImage not ready, skipping redraw.");
+    }
     return;
   }
 
-  // --- Declare variables needed later, outside the conditional blocks ---
-  bool vertical_mode = false;
-  QColor text_color = Qt::white;
-  int font_size = 12;
-  QColor frame_color = Qt::white;
-  int prop_width = 0;
-  int prop_height = 0;
-  int total_texture_width = 0;
-  int total_texture_height = 0;
-  int bar_width = 0;
-  int bar_height = 0;
-  float value_range = 0.0f;
-  float clamped_value = 0.0f;
-  float percentage = 0.0f;
-  int frame_thickness = 2;
-  QString title_text = "";
-  uint8_t display_precision = 1; // Default precision
+  // --- Get state from message and properties ---
+  bool vertical_mode = vertical_mode_property_->getBool();
+  bool compact_mode = last_msg_->compact;
+  uint8_t display_precision = last_msg_->precision;
+  QColor text_color = text_color_property_->getColor();
+  QColor frame_color = frame_color_property_->getColor();
+  int font_size = font_size_property_->getInt();
+  int frame_thickness = 2; // Could be a property later
+
+  // Determine title text
+  QString title_text = QString::fromStdString(last_msg_->title);
+  if (title_text.isEmpty() && topic_property_) {
+      title_text = QString::fromStdString(topic_property_->getTopicStd());
+  }
 
   // --- Determine Critical State and Background ---
   QColor background_color = Qt::transparent; // Default background
   bool is_critical = false;
   bool draw_content = true; // Flag to control if content is drawn (for flashing)
 
-  if (last_msg_) {
-    is_critical = last_msg_->critical_if_under ?
-                  last_msg_->current < last_msg_->critical_value :
-                  last_msg_->current > last_msg_->critical_value;
+  is_critical = last_msg_->critical_if_under ?
+                last_msg_->current < last_msg_->critical_value :
+                last_msg_->current > last_msg_->critical_value;
 
-    if (is_critical) {
-      if (last_msg_->critical_animation_type == wifi_viz::msg::MinMaxCurr::ANIMATION_COLORIZE) {
-        background_color = QColor(
+  if (is_critical) {
+    if (last_msg_->critical_animation_type == wifi_viz::msg::MinMaxCurr::ANIMATION_COLORIZE) {
+      background_color = QColor( /* ... get critical color ... */
+        static_cast<int>(last_msg_->critical_color.r * 255.0),
+        static_cast<int>(last_msg_->critical_color.g * 255.0),
+        static_cast<int>(last_msg_->critical_color.b * 255.0),
+        static_cast<int>(last_msg_->critical_color.a * 255.0)
+      );
+    } else if (last_msg_->critical_animation_type == wifi_viz::msg::MinMaxCurr::ANIMATION_FLASH) {
+      if (show_critical_flash_) {
+        background_color = QColor( /* ... get critical color ... */
           static_cast<int>(last_msg_->critical_color.r * 255.0),
           static_cast<int>(last_msg_->critical_color.g * 255.0),
           static_cast<int>(last_msg_->critical_color.b * 255.0),
-          static_cast<int>(last_msg_->critical_color.a * 255.0) // Use alpha from message
+          static_cast<int>(last_msg_->critical_color.a * 255.0)
         );
-      } else if (last_msg_->critical_animation_type == wifi_viz::msg::MinMaxCurr::ANIMATION_FLASH) {
-        if (show_critical_flash_) {
-          background_color = QColor(
-            static_cast<int>(last_msg_->critical_color.r * 255.0),
-            static_cast<int>(last_msg_->critical_color.g * 255.0),
-            static_cast<int>(last_msg_->critical_color.b * 255.0),
-            static_cast<int>(last_msg_->critical_color.a * 255.0) // Use alpha from message
-          );
-        } else {
-          // If flashing and 'off', don't draw content
-          draw_content = false;
-        }
+      } else {
+        draw_content = false; // Don't draw content during the 'off' phase of flash
       }
-      // else ANIMATION_NONE: background remains transparent (or default)
     }
-    // else not critical: background remains transparent (or default)
-    display_precision = last_msg_->precision; // Get precision from message
-  } else {
-    // If no message, don't draw content
-    draw_content = false;
+    // else ANIMATION_NONE: background remains transparent
   }
+  // else not critical: background remains transparent
 
   // --- Start Drawing ---
   texture_image_.fill(Qt::transparent); // Clear previous frame first
 
   QPainter painter(&texture_image_);
   painter.setRenderHint(QPainter::Antialiasing, true);
+  QFont font = painter.font();
+  font.setPointSize(font_size);
+  painter.setFont(font);
+  QFontMetrics fm(painter.font()); // Use painter's font for metrics
 
   // --- Draw Background ---
   painter.fillRect(texture_image_.rect(), background_color);
 
-  // --- Draw Content (only if needed) ---
-  if (draw_content && last_msg_) { // Ensure last_msg_ is valid here
-    // --- Get Properties ---
-    vertical_mode = vertical_mode_property_->getBool();
-    text_color = text_color_property_->getColor();
-    font_size = font_size_property_->getInt();
-    QFont font = painter.font();
-    font.setPointSize(font_size);
-    painter.setFont(font);
+  // --- Draw Content (only if needed and message exists) ---
+  if (draw_content) {
+    // --- Calculate values needed for drawing ---
+    QString min_str = QString::number(last_msg_->min, 'f', display_precision);
+    QString max_str = QString::number(last_msg_->max, 'f', display_precision);
+    QString current_str = QString::number(last_msg_->current, 'f', display_precision);
+    int current_min_text_width = fm.horizontalAdvance(min_str);
+    int current_max_text_width = fm.horizontalAdvance(max_str);
+    int current_topic_text_width = fm.horizontalAdvance(title_text);
+    int current_text_height = fm.height(); // Use actual height without padding here
 
-    frame_color = frame_color_property_->getColor();
-    prop_width = width_property_->getInt();
-    prop_height = height_property_->getInt();
-    total_texture_width = texture_image_.width();
-    total_texture_height = texture_image_.height();
+    int bar_draw_width = vertical_mode ? height_property_->getInt() : width_property_->getInt();
+    int bar_draw_height = vertical_mode ? width_property_->getInt() : height_property_->getInt();
 
-    // --- Calculate Bar Dimensions ---
-    bar_width = vertical_mode ? prop_height : prop_width;
-    bar_height = vertical_mode ? prop_width : prop_height;
+    float value_range = last_msg_->max - last_msg_->min;
+    float clamped_value = std::max(last_msg_->min, std::min(last_msg_->max, last_msg_->current));
+    float percentage = (value_range > 1e-6) ? (clamped_value - last_msg_->min) / value_range : 0.0f;
 
-    // --- Calculate Percentage (using last_msg_) ---
-    value_range = last_msg_->max - last_msg_->min;
-    clamped_value = std::max(last_msg_->min, std::min(last_msg_->max, last_msg_->current));
-    percentage = (value_range > 1e-6) ? (clamped_value - last_msg_->min) / value_range : 0.0f;
-    // frame_thickness = 2; // Already declared above
-
-    // --- Define Drawing Areas and Draw based on Mode ---
     painter.setPen(text_color); // Default pen for text
 
+    // --- Layout Logic ---
     if (vertical_mode) {
-      // --- Vertical Layout ---
-      // Define Rects (Max at top, Min at bottom)
-      QRect max_text_area(0, 0, bar_width, min_text_width_); // Use text width as height
-      QRect bar_rect(0, max_text_area.bottom() + text_margin_, bar_width, bar_height);
-      QRect min_text_area(0, bar_rect.bottom() + text_margin_, bar_width, max_text_width_);
-      QRect topic_text_area(bar_width, 0, text_height_, total_texture_height); // Rotated text area
+        if (compact_mode) {
+            // --- Vertical Compact Layout ---
+            // [ Title (centered, top) ]
+            // [ Max (Rot) ]
+            // [ Bar ]
+            // [ Min (Rot) ]
+            int content_width = bar_draw_width; // Bar defines the width
+            int title_y = text_margin_;
+            int max_rot_y = title_y + current_text_height + text_margin_;
+            int bar_y = max_rot_y + current_max_text_width + text_margin_; // Rotated max text height = its width
+            int min_rot_y = bar_y + bar_draw_height + text_margin_;
+            int center_x = texture_image_.width() / 2; // Center horizontally
 
-      // --- Draw Rotated Min/Max Text ---
-      painter.setPen(text_color);
-      QString max_text = QString::number(last_msg_->max, 'f', display_precision); // Use precision
-      QString min_text = QString::number(last_msg_->min, 'f', display_precision); // Use precision
+            // Draw Title (Horizontal, Centered at Top)
+            if (!title_text.isEmpty()) {
+                QRect topic_text_area(center_x - current_topic_text_width / 2, title_y, current_topic_text_width, current_text_height);
+                painter.drawText(topic_text_area, Qt::AlignCenter | Qt::AlignVCenter, title_text);
+            }
 
-      // Draw Max Text (Rotated -90 deg, centered above bar)
-      painter.save();
-      painter.translate(max_text_area.center().x(), max_text_area.bottom() - (text_margin_ + 10)); // Added + 10
-      painter.rotate(-90);
-      QRect rotated_max_rect(-max_text_area.height() / 2, -max_text_area.width() / 2, max_text_area.height(), max_text_area.width());
-      painter.drawText(rotated_max_rect, Qt::AlignCenter, max_text);
-      painter.restore();
+            // Define areas relative to center_x for rotation
+            QRect max_text_area(center_x - content_width / 2, max_rot_y, content_width, current_max_text_width);
+            QRect bar_rect(center_x - content_width / 2, bar_y, content_width, bar_draw_height);
+            QRect min_text_area(center_x - content_width / 2, min_rot_y, content_width, current_min_text_width);
 
-      // Draw Min Text (Rotated -90 deg, centered below bar)
-      painter.save();
-      painter.translate(min_text_area.center().x(), min_text_area.top() + (text_margin_ + 10)); // Added + 10
-      painter.rotate(-90);
-      QRect rotated_min_rect(-min_text_area.height() / 2, -min_text_area.width() / 2, min_text_area.height(), min_text_area.width());
-      painter.drawText(rotated_min_rect, Qt::AlignCenter, min_text);
-      painter.restore();
+            // Draw Rotated Max Text
+            painter.save();
+            painter.translate(max_text_area.center().x(), max_text_area.center().y());
+            painter.rotate(-90);
+            QRect rotated_max_rect(-max_text_area.height() / 2, -max_text_area.width() / 2, max_text_area.height(), max_text_area.width());
+            painter.drawText(rotated_max_rect, Qt::AlignCenter, max_str);
+            painter.restore();
 
-      // --- Draw Bar (Vertical) ---
-      int available_height = bar_rect.height() - 2 * frame_thickness;
-      int bar_fill_height = std::max(0, static_cast<int>(available_height * percentage));
+            // Draw Rotated Min Text
+            painter.save();
+            painter.translate(min_text_area.center().x(), min_text_area.center().y());
+            painter.rotate(-90);
+            QRect rotated_min_rect(-min_text_area.height() / 2, -min_text_area.width() / 2, min_text_area.height(), min_text_area.width());
+            painter.drawText(rotated_min_rect, Qt::AlignCenter, min_str);
+            painter.restore();
 
-      // Draw Frame
-      painter.setPen(QPen(frame_color, frame_thickness));
-      painter.setBrush(Qt::transparent);
-      QRectF frame_draw_rect(
-          bar_rect.left() + frame_thickness / 2.0,
-          bar_rect.top() + frame_thickness / 2.0,
-          bar_rect.width() - frame_thickness,
-          bar_rect.height() - frame_thickness);
-      painter.drawRect(frame_draw_rect);
+            // Draw Bar (Vertical)
+            int available_height = bar_rect.height() - 2 * frame_thickness;
+            int bar_fill_height = std::max(0, static_cast<int>(available_height * percentage));
+            // Draw Frame
+            painter.setPen(QPen(frame_color, frame_thickness));
+            painter.setBrush(Qt::transparent);
+            QRectF frame_draw_rect(bar_rect.left() + frame_thickness / 2.0, bar_rect.top() + frame_thickness / 2.0, bar_rect.width() - frame_thickness, bar_rect.height() - frame_thickness);
+            painter.drawRect(frame_draw_rect);
+            // Draw Fill
+            QColor bar_color; // ... determine bar color ...
+             if (last_msg_->current_color.a > 0.01) {
+                 bar_color = QColor( static_cast<int>(last_msg_->current_color.r * 255.0), static_cast<int>(last_msg_->current_color.g * 255.0), static_cast<int>(last_msg_->current_color.b * 255.0), static_cast<int>(last_msg_->current_color.a * 255.0) );
+             } else {
+                 if (percentage < 0.5f) { bar_color = QColor::fromRgbF(1.0, percentage * 2.0, 0.0); } else { bar_color = QColor::fromRgbF(1.0 - (percentage - 0.5) * 2.0, 1.0, 0.0); }
+             }
+            if (bar_fill_height > 0) {
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(bar_color);
+                QRect bar_fill_rect(bar_rect.left() + frame_thickness, bar_rect.bottom() - frame_thickness - bar_fill_height, bar_rect.width() - 2 * frame_thickness, bar_fill_height);
+                painter.drawRect(bar_fill_rect);
+            }
 
-      // Draw Fill (Starts from bottom)
-      QColor bar_color;
-      if (last_msg_->current_color.a > 0.01) { // Check if alpha is significant
-          bar_color = QColor(
-              static_cast<int>(last_msg_->current_color.r * 255.0),
-              static_cast<int>(last_msg_->current_color.g * 255.0),
-              static_cast<int>(last_msg_->current_color.b * 255.0),
-              static_cast<int>(last_msg_->current_color.a * 255.0)
-          );
-      } else { // Fallback to gradient
-          if (percentage < 0.5f) { bar_color = QColor::fromRgbF(1.0, percentage * 2.0, 0.0); }
-          else { bar_color = QColor::fromRgbF(1.0 - (percentage - 0.5) * 2.0, 1.0, 0.0); }
-      }
+            // Draw Rotated Current Value Text (Centered in Bar Rect)
+            painter.setPen(text_color);
+            painter.save();
+            painter.translate(bar_rect.center());
+            painter.rotate(-90);
+            QRect rotated_curr_rect(-bar_rect.height() / 2, -bar_rect.width() / 2, bar_rect.height(), bar_rect.width());
+            painter.drawText(rotated_curr_rect, Qt::AlignCenter, current_str);
+            painter.restore();
 
-      if (bar_fill_height > 0) {
-          painter.setPen(Qt::NoPen);
-          painter.setBrush(bar_color);
-          QRect bar_fill_rect(
-              bar_rect.left() + frame_thickness,
-              bar_rect.bottom() - frame_thickness - bar_fill_height,
-              bar_rect.width() - 2 * frame_thickness,
-              bar_fill_height);
-          painter.drawRect(bar_fill_rect);
-      }
+        } else {
+            // --- Vertical Non-Compact Layout (Original Logic) ---
+            int bar_area_height = bar_draw_height + current_max_text_width + current_min_text_width + 2 * text_margin_;
+            int title_area_width = current_text_height; // Rotated title width = text height
+            int bar_area_width = bar_draw_width;
+            int total_draw_height = std::max(bar_area_height, current_topic_text_width); // Max height of bar section or rotated title
+            int bar_area_y_offset = (total_draw_height - bar_area_height) / 2; // Center bar area vertically if needed
+            int title_area_x_offset = bar_area_width + text_margin_;
 
-      // --- Draw Rotated Current Value Text (Centered in Bar Rect) ---
-      painter.setPen(text_color);
-      QString current_text = QString::number(last_msg_->current, 'f', display_precision); // Use precision
-      painter.save();
-      painter.translate(bar_rect.center());
-      painter.rotate(-90);
-      QRect rotated_curr_rect(-bar_rect.height() / 2, -bar_rect.width() / 2, bar_rect.height(), bar_rect.width());
-      painter.drawText(rotated_curr_rect, Qt::AlignCenter, current_text);
-      painter.restore();
+            // Define Rects
+            QRect max_text_area(0, bar_area_y_offset, bar_area_width, current_max_text_width);
+            QRect bar_rect(0, max_text_area.bottom() + text_margin_, bar_area_width, bar_draw_height);
+            QRect min_text_area(0, bar_rect.bottom() + text_margin_, bar_area_width, current_min_text_width);
+            QRect topic_text_area(title_area_x_offset, 0, title_area_width, total_draw_height);
 
-      // --- Draw Rotated Topic Text ---
-      title_text = QString::fromStdString(last_msg_->title);
-      if (title_text.isEmpty()) {
-          title_text = QString::fromStdString(topic_property_->getTopicStd());
-      }
-      if (!title_text.isEmpty()) {
-          painter.save();
-          painter.translate(topic_text_area.left(), topic_text_area.bottom());
-          painter.rotate(-90);
-          QRect rotated_draw_rect(0, 0, topic_text_area.height(), topic_text_area.width());
-          painter.drawText(rotated_draw_rect.adjusted(2, 0, -2, 0), Qt::AlignCenter, title_text);
-          painter.restore();
-      }
+            // Draw Rotated Min/Max Text
+            painter.setPen(text_color);
+            painter.save(); // Max
+            painter.translate(max_text_area.center().x(), max_text_area.center().y());
+            painter.rotate(-90);
+            QRect rotated_max_rect(-max_text_area.height() / 2, -max_text_area.width() / 2, max_text_area.height(), max_text_area.width());
+            painter.drawText(rotated_max_rect, Qt::AlignCenter, max_str);
+            painter.restore();
+            painter.save(); // Min
+            painter.translate(min_text_area.center().x(), min_text_area.center().y());
+            painter.rotate(-90);
+            QRect rotated_min_rect(-min_text_area.height() / 2, -min_text_area.width() / 2, min_text_area.height(), min_text_area.width());
+            painter.drawText(rotated_min_rect, Qt::AlignCenter, min_str);
+            painter.restore();
 
-    } else {
-      // --- Horizontal Layout ---
-      QRect min_text_rect(0, 0, min_text_width_, bar_height);
-      QRect bar_rect(min_text_width_ + text_margin_, 0, bar_width, bar_height);
-      QRect max_text_rect(bar_rect.right() + text_margin_, 0, max_text_width_, bar_height);
-      QRect topic_text_rect(0, bar_height, total_texture_width, text_height_);
+            // Draw Bar (Vertical)
+            int available_height = bar_rect.height() - 2 * frame_thickness;
+            int bar_fill_height = std::max(0, static_cast<int>(available_height * percentage));
+            // Draw Frame
+            painter.setPen(QPen(frame_color, frame_thickness));
+            painter.setBrush(Qt::transparent);
+            QRectF frame_draw_rect(bar_rect.left() + frame_thickness / 2.0, bar_rect.top() + frame_thickness / 2.0, bar_rect.width() - frame_thickness, bar_rect.height() - frame_thickness);
+            painter.drawRect(frame_draw_rect);
+            // Draw Fill
+            QColor bar_color; // ... determine bar color ...
+             if (last_msg_->current_color.a > 0.01) {
+                 bar_color = QColor( static_cast<int>(last_msg_->current_color.r * 255.0), static_cast<int>(last_msg_->current_color.g * 255.0), static_cast<int>(last_msg_->current_color.b * 255.0), static_cast<int>(last_msg_->current_color.a * 255.0) );
+             } else {
+                 if (percentage < 0.5f) { bar_color = QColor::fromRgbF(1.0, percentage * 2.0, 0.0); } else { bar_color = QColor::fromRgbF(1.0 - (percentage - 0.5) * 2.0, 1.0, 0.0); }
+             }
+            if (bar_fill_height > 0) {
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(bar_color);
+                QRect bar_fill_rect(bar_rect.left() + frame_thickness, bar_rect.bottom() - frame_thickness - bar_fill_height, bar_rect.width() - 2 * frame_thickness, bar_fill_height);
+                painter.drawRect(bar_fill_rect);
+            }
 
-      // Draw Min/Max Text
-      QString min_text = QString::number(last_msg_->min, 'f', display_precision); // Use precision
-      painter.drawText(min_text_rect, Qt::AlignRight | Qt::AlignVCenter, min_text);
-      QString max_text = QString::number(last_msg_->max, 'f', display_precision); // Use precision
-      painter.drawText(max_text_rect, Qt::AlignLeft | Qt::AlignVCenter, max_text);
+            // Draw Rotated Current Value Text
+            painter.setPen(text_color);
+            painter.save();
+            painter.translate(bar_rect.center());
+            painter.rotate(-90);
+            QRect rotated_curr_rect(-bar_rect.height() / 2, -bar_rect.width() / 2, bar_rect.height(), bar_rect.width());
+            painter.drawText(rotated_curr_rect, Qt::AlignCenter, current_str);
+            painter.restore();
 
-      // Draw Bar Graph
-      int available_width = bar_rect.width() - 2 * frame_thickness;
-      int bar_fill_width = std::max(0, static_cast<int>(available_width * percentage));
+            // Draw Rotated Topic Text
+            if (!title_text.isEmpty()) {
+                painter.save();
+                painter.translate(topic_text_area.left(), topic_text_area.bottom()); // Pivot at bottom-left
+                painter.rotate(-90);
+                QRect rotated_draw_rect(0, 0, topic_text_area.height(), topic_text_area.width()); // Width/Height swapped
+                painter.drawText(rotated_draw_rect.adjusted(2, 0, -2, 0), Qt::AlignCenter, title_text);
+                painter.restore();
+            }
+        }
+    } else { // Horizontal Mode
+        int content_height = std::max(bar_draw_height, current_text_height); // Height of the main row
+        int y_offset = (texture_image_.height() - content_height) / 2; // Center vertically if needed (e.g., non-compact has extra space)
 
-      // Draw Frame
-      painter.setPen(QPen(frame_color, frame_thickness));
-      painter.setBrush(Qt::transparent);
-      QRectF frame_draw_rect(
-          bar_rect.left() + frame_thickness / 2.0,
-          bar_rect.top() + frame_thickness / 2.0,
-          bar_rect.width() - frame_thickness,
-          bar_rect.height() - frame_thickness);
-      painter.drawRect(frame_draw_rect);
+        if (compact_mode) {
+            // --- Horizontal Compact Layout ---
+            // [Title][Min][Bar][Max] - All vertically centered in texture height
+            int title_x = text_margin_;
+            int min_x = title_x + current_topic_text_width + text_margin_;
+            int bar_x = min_x + current_min_text_width + text_margin_;
+            int max_x = bar_x + bar_draw_width + text_margin_;
 
-      // Draw Fill (Using color from message if available, otherwise default gradient)
-      QColor bar_color;
-      if (last_msg_->current_color.a > 0.01) { // Check if alpha is significant
-          bar_color = QColor(
-              static_cast<int>(last_msg_->current_color.r * 255.0),
-              static_cast<int>(last_msg_->current_color.g * 255.0),
-              static_cast<int>(last_msg_->current_color.b * 255.0),
-              static_cast<int>(last_msg_->current_color.a * 255.0)
-          );
-      } else { // Fallback to gradient
-          if (percentage < 0.5f) { bar_color = QColor::fromRgbF(1.0, percentage * 2.0, 0.0); }
-          else { bar_color = QColor::fromRgbF(1.0 - (percentage - 0.5) * 2.0, 1.0, 0.0); }
-      }
+            QRect topic_text_rect(title_x, y_offset, current_topic_text_width, content_height);
+            QRect min_text_rect(min_x, y_offset, current_min_text_width, content_height);
+            QRect bar_rect(bar_x, y_offset + (content_height - bar_draw_height)/2, bar_draw_width, bar_draw_height); // Center bar within content height
+            QRect max_text_rect(max_x, y_offset, current_max_text_width, content_height);
 
-      if (bar_fill_width > 0) {
-          painter.setPen(Qt::NoPen);
-          painter.setBrush(bar_color);
-          QRect bar_fill_rect(
-              bar_rect.left() + frame_thickness,
-              bar_rect.top() + frame_thickness,
-              bar_fill_width,
-              bar_rect.height() - 2 * frame_thickness);
-          painter.drawRect(bar_fill_rect);
-      }
+            // Draw Title Text (Leftmost)
+            if (!title_text.isEmpty()) {
+                painter.drawText(topic_text_rect, Qt::AlignLeft | Qt::AlignVCenter, title_text);
+            }
+            // Draw Min Text
+            painter.drawText(min_text_rect, Qt::AlignRight | Qt::AlignVCenter, min_str);
+            // Draw Max Text
+            painter.drawText(max_text_rect, Qt::AlignLeft | Qt::AlignVCenter, max_str);
 
-      // Draw Current Value Text
-      painter.setPen(text_color);
-      QString current_text = QString::number(last_msg_->current, 'f', display_precision); // Use precision
-      painter.drawText(bar_rect, Qt::AlignCenter, current_text);
+            // Draw Bar Graph
+            int available_width = bar_rect.width() - 2 * frame_thickness;
+            int bar_fill_width = std::max(0, static_cast<int>(available_width * percentage));
+            // Draw Frame
+            painter.setPen(QPen(frame_color, frame_thickness));
+            painter.setBrush(Qt::transparent);
+            QRectF frame_draw_rect(bar_rect.left() + frame_thickness / 2.0, bar_rect.top() + frame_thickness / 2.0, bar_rect.width() - frame_thickness, bar_rect.height() - frame_thickness);
+            painter.drawRect(frame_draw_rect);
+            // Draw Fill
+            QColor bar_color; // ... determine bar color ...
+             if (last_msg_->current_color.a > 0.01) {
+                 bar_color = QColor( static_cast<int>(last_msg_->current_color.r * 255.0), static_cast<int>(last_msg_->current_color.g * 255.0), static_cast<int>(last_msg_->current_color.b * 255.0), static_cast<int>(last_msg_->current_color.a * 255.0) );
+             } else {
+                 if (percentage < 0.5f) { bar_color = QColor::fromRgbF(1.0, percentage * 2.0, 0.0); } else { bar_color = QColor::fromRgbF(1.0 - (percentage - 0.5) * 2.0, 1.0, 0.0); }
+             }
+            if (bar_fill_width > 0) {
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(bar_color);
+                QRect bar_fill_rect(bar_rect.left() + frame_thickness, bar_rect.top() + frame_thickness, bar_fill_width, bar_rect.height() - 2 * frame_thickness);
+                painter.drawRect(bar_fill_rect);
+            }
 
-      // Draw Topic Text (Using title from message if available, else topic property)
-      title_text = QString::fromStdString(last_msg_->title);
-      if (title_text.isEmpty()) {
-          title_text = QString::fromStdString(topic_property_->getTopicStd()); // Fallback to topic
-      }
-      if (!title_text.isEmpty()) {
-          painter.drawText(topic_text_rect.adjusted(0, 2, 0, -2),
-                           Qt::AlignCenter | Qt::AlignTop,
-                           title_text);
-      }
+            // Draw Current Value Text
+            painter.setPen(text_color);
+            painter.drawText(bar_rect, Qt::AlignCenter, current_str);
+
+        } else {
+            // --- Horizontal Non-Compact Layout (Original Logic) ---
+            // [Min][Bar][Max] (Top row)
+            // [   Title   ] (Bottom row)
+            int bar_row_y = 0; // Top row starts at y=0
+            int title_row_y = bar_draw_height; // Title row starts below bar row
+
+            int min_x = text_margin_;
+            int bar_x = min_x + current_min_text_width + text_margin_;
+            int max_x = bar_x + bar_draw_width + text_margin_;
+
+            QRect min_text_rect(min_x, bar_row_y, current_min_text_width, bar_draw_height);
+            QRect bar_rect(bar_x, bar_row_y, bar_draw_width, bar_draw_height);
+            QRect max_text_rect(max_x, bar_row_y, current_max_text_width, bar_draw_height);
+            QRect topic_text_rect(0, title_row_y, texture_image_.width(), current_text_height + 4); // Title spans full width, use padded height
+
+            // Draw Min/Max Text
+            painter.drawText(min_text_rect, Qt::AlignRight | Qt::AlignVCenter, min_str);
+            painter.drawText(max_text_rect, Qt::AlignLeft | Qt::AlignVCenter, max_str);
+
+            // Draw Bar Graph
+            int available_width = bar_rect.width() - 2 * frame_thickness;
+            int bar_fill_width = std::max(0, static_cast<int>(available_width * percentage));
+            // Draw Frame
+            painter.setPen(QPen(frame_color, frame_thickness));
+            painter.setBrush(Qt::transparent);
+            QRectF frame_draw_rect(bar_rect.left() + frame_thickness / 2.0, bar_rect.top() + frame_thickness / 2.0, bar_rect.width() - frame_thickness, bar_rect.height() - frame_thickness);
+            painter.drawRect(frame_draw_rect);
+            // Draw Fill
+            QColor bar_color; // ... determine bar color ...
+             if (last_msg_->current_color.a > 0.01) {
+                 bar_color = QColor( static_cast<int>(last_msg_->current_color.r * 255.0), static_cast<int>(last_msg_->current_color.g * 255.0), static_cast<int>(last_msg_->current_color.b * 255.0), static_cast<int>(last_msg_->current_color.a * 255.0) );
+             } else {
+                 if (percentage < 0.5f) { bar_color = QColor::fromRgbF(1.0, percentage * 2.0, 0.0); } else { bar_color = QColor::fromRgbF(1.0 - (percentage - 0.5) * 2.0, 1.0, 0.0); }
+             }
+            if (bar_fill_width > 0) {
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(bar_color);
+                QRect bar_fill_rect(bar_rect.left() + frame_thickness, bar_rect.top() + frame_thickness, bar_fill_width, bar_rect.height() - 2 * frame_thickness);
+                painter.drawRect(bar_fill_rect);
+            }
+
+            // Draw Current Value Text
+            painter.setPen(text_color);
+            painter.drawText(bar_rect, Qt::AlignCenter, current_str);
+
+            // Draw Topic Text (Bottom row, centered)
+            if (!title_text.isEmpty()) {
+                painter.drawText(topic_text_rect.adjusted(0, 2, 0, -2), Qt::AlignCenter | Qt::AlignTop, title_text);
+            }
+        }
     }
-  } // End if(draw_content && last_msg_)
+  } // End if(draw_content)
 
   painter.end();
 
-  // --- Upload Texture Data to Ogre (Always happens) ---
+  // --- Upload Texture Data to Ogre ---
   try {
     Ogre::HardwarePixelBufferSharedPtr pixel_buffer = texture_->getBuffer();
+    // Lock the buffer for writing (discard previous contents)
     pixel_buffer->lock(Ogre::HardwareBuffer::HBL_DISCARD);
     const Ogre::PixelBox & pixel_box = pixel_buffer->getCurrentLock();
     uint8_t * pDest = static_cast<uint8_t *>(pixel_box.data);
-    size_t ogre_bytes_per_line = pixel_box.rowPitch * Ogre::PixelUtil::getNumElemBytes(pixel_box.format);
 
-    if (ogre_bytes_per_line == static_cast<size_t>(texture_image_.bytesPerLine())) {
+    // Check if Ogre's row pitch matches QImage's bytes per line
+    size_t ogre_bytes_per_line = pixel_box.rowPitch * Ogre::PixelUtil::getNumElemBytes(pixel_box.format);
+    size_t qimage_bytes_per_line = static_cast<size_t>(texture_image_.bytesPerLine());
+
+    if (ogre_bytes_per_line == qimage_bytes_per_line) {
+      // If they match, we can copy the entire buffer at once
       memcpy(pDest, texture_image_.constBits(), texture_image_.sizeInBytes());
     } else {
+      // If they don't match (e.g., due to Ogre padding), copy row by row
+      RVIZ_COMMON_LOG_DEBUG_STREAM("Ogre row pitch (" << ogre_bytes_per_line << ") differs from QImage bytes per line (" << qimage_bytes_per_line << "). Copying row by row.");
+      size_t bytes_to_copy_per_line = std::min(ogre_bytes_per_line, qimage_bytes_per_line); // Copy the minimum to avoid buffer overflows
       for (int y = 0; y < texture_image_.height(); ++y) {
         memcpy(
-          pDest + y * ogre_bytes_per_line,
-          texture_image_.constScanLine(y),
-          texture_image_.bytesPerLine());
+          pDest + y * ogre_bytes_per_line, // Destination pointer advances by Ogre's pitch
+          texture_image_.constScanLine(y), // Source pointer for the current row
+          bytes_to_copy_per_line);         // Number of bytes in the row to copy
       }
     }
+    // Unlock the buffer, making the changes visible to Ogre
     pixel_buffer->unlock();
   } catch (Ogre::Exception & e) {
     RVIZ_COMMON_LOG_ERROR_STREAM("Error uploading texture data: " << e.getDescription());
+  } catch (const std::exception& e) {
+      RVIZ_COMMON_LOG_ERROR_STREAM("Standard exception uploading texture data: " << e.what());
+  } catch (...) {
+      RVIZ_COMMON_LOG_ERROR("Unknown exception uploading texture data.");
   }
 }
+
 
 } // namespace wifi_viz
 

@@ -1,16 +1,16 @@
-#ifndef WIFI_VIZ__WIFI_STATE_DISPLAY_HPP_ // Renamed include guard
+#ifndef WIFI_VIZ__WIFI_STATE_DISPLAY_HPP_
 #define WIFI_VIZ__WIFI_STATE_DISPLAY_HPP_
 
 #include <memory>
 #include <string>
-#include <chrono> // <<< Add chrono include
+#include <chrono>
 
 #include "wifi_viz/msg/min_max_curr.hpp"
 
 #include <rviz_common/ros_topic_display.hpp>
 #include <rviz_common/properties/color_property.hpp>
 #include <rviz_common/properties/int_property.hpp>
-#include <rviz_common/properties/bool_property.hpp> // <<< Add BoolProperty include
+#include <rviz_common/properties/bool_property.hpp>
 
 // Ogre-specific headers
 #include <OgreColourValue.h>
@@ -20,7 +20,7 @@
 // Qt headers for drawing
 #include <QColor>
 #include <QImage>
-#include <QFont> // <<< Add QFont include
+#include <QFont>
 
 // Forward declarations for Ogre classes
 namespace Ogre
@@ -33,13 +33,13 @@ namespace wifi_viz
 {
 
 // Ensure the template argument matches the message type
-class WifiStateDisplay : public rviz_common::RosTopicDisplay<wifi_viz::msg::MinMaxCurr> // Renamed class
+class WifiStateDisplay : public rviz_common::RosTopicDisplay<wifi_viz::msg::MinMaxCurr>
 {
   Q_OBJECT
 
 public:
-  WifiStateDisplay(); // Renamed constructor
-  ~WifiStateDisplay() override; // Renamed destructor
+  WifiStateDisplay();
+  ~WifiStateDisplay() override;
 
   // RViz Display overrides
   void onInitialize() override;
@@ -63,16 +63,21 @@ private:
   void createTexture();
   // Helper to ensure Ogre overlay elements exist
   void ensureOverlay();
+  // Declare the helper function
+  void calculateDimensions(
+    int& total_width, int& total_height,
+    int& bar_width, int& bar_height,
+    int& min_text_w, int& max_text_w, int& topic_text_w, int& text_h);
 
   // RViz Properties
   rviz_common::properties::IntProperty * width_property_;
   rviz_common::properties::IntProperty * height_property_;
-  rviz_common::properties::IntProperty * left_property_; // Use 'left' instead of 'x'
-  rviz_common::properties::IntProperty * top_property_;  // Use 'top' instead of 'y'
+  rviz_common::properties::IntProperty * left_property_;
+  rviz_common::properties::IntProperty * top_property_;
   rviz_common::properties::ColorProperty * frame_color_property_;
-  rviz_common::properties::ColorProperty * text_color_property_; // <<< Add text color property
-  rviz_common::properties::IntProperty * font_size_property_;   // <<< Add font size property
-  rviz_common::properties::BoolProperty * vertical_mode_property_; // <<< Add orientation property
+  rviz_common::properties::ColorProperty * text_color_property_;
+  rviz_common::properties::IntProperty * font_size_property_;
+  rviz_common::properties::BoolProperty * vertical_mode_property_;
 
   // Ogre Overlay related members
   Ogre::Overlay * overlay_;
@@ -85,19 +90,20 @@ private:
   std::string panel_name_;
 
   // Drawing members
-  QImage texture_image_; // QImage used as a canvas
-  bool needs_redraw_;    // Flag to trigger texture update
-  int text_height_;      // <<< Add variable to store calculated text height
-  int min_text_width_;   // <<< Add variable for min text width
-  int max_text_width_;   // <<< Add variable for max text width
-  int text_margin_;      // <<< Add variable for margin
+  QImage texture_image_;
+  bool needs_redraw_;
+  int text_height_;
+  int min_text_width_;
+  int max_text_width_;
+  int topic_text_width_; // Add member variable declaration
+  int text_margin_;
 
   // State
-  wifi_viz::msg::MinMaxCurr::ConstSharedPtr last_msg_; // <<< ADD: Store the last message
-  bool show_critical_flash_; // <<< ADD: State for flashing animation
-  std::chrono::time_point<std::chrono::steady_clock> last_flash_time_; // <<< ADD: Timer for flashing
+  wifi_viz::msg::MinMaxCurr::ConstSharedPtr last_msg_;
+  bool show_critical_flash_;
+  std::chrono::time_point<std::chrono::steady_clock> last_flash_time_;
 };
 
 } // namespace wifi_viz
 
-#endif // WIFI_VIZ__WIFI_STATE_DISPLAY_HPP_ // Renamed include guard
+#endif // WIFI_VIZ__WIFI_STATE_DISPLAY_HPP_
