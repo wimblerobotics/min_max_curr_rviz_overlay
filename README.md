@@ -62,7 +62,11 @@ This package provides an RViz display plugin that visualizes a numerical value r
 3.  **Configure the Display:**
     *   Select the "MinMaxCurrDisplay" in the Displays panel.
     *   Set the "Topic" property to the ROS 2 topic where `wifi_viz/msg/MinMaxCurr` messages will be published (e.g., `/battery_percentage_overlay`).
-    *   **Critical Service Name**: Optionally, set this property to the name of a ROS 2 service (type `wifi_viz/srv/TriggerCriticalAction`) that should be called when the value enters a critical state (e.g., `/trigger_critical_action`). Leave empty to disable.
+    *   **Critical Service Name**: Optionally, set this property to the name of a ROS 2 service (type `wifi_viz/srv/TriggerCriticalAction`) that should be called when the value enters a critical state (e.g., `/trigger_critical_action`).
+        *   If a received message on the topic contains a non-empty `critical_service_name` field, this property will be automatically updated to match the value from the message.
+        *   You can manually override this property in RViz after a message has set it.
+        *   **Important:** The service is called only when the state *transitions* from non-critical to critical. It will not be called repeatedly if the value remains critical over multiple messages. It will be called again only after the value becomes non-critical and then enters the critical state once more.
+        *   Leave empty to disable service calls.
     *   Adjust other properties like width, height, position, colors, font size, and orientation as needed.
 
 4.  **Run the Critical Action Service (Optional):**
@@ -84,7 +88,8 @@ Here are some examples using `ros2 topic pub` to send a single message to the `/
 
 **Example 1: Critical (Under Threshold), No Animation, Red Current Color**
 
-Value (0.15) is below critical (0.25), but animation is NONE. The bar color will be red.
+Value (0.15) is below critical (0.25), but animation is NONE. The bar color will be red. 
+Note that because 'precision' has not been set, the value will show as 0.2 instead of the actual 0.15.
 
 ~![Example 1](media/overlay_example1.png)
 
@@ -209,7 +214,7 @@ ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
 *   `critical_value` (float32): The threshold for the critical state.
 *   `critical_if_under` (bool): If true, the state is critical when `current < critical_value`. If false, critical when `current > critical_value`.
 *   `critical_animation_type` (uint8): Type of animation for critical state (0: None, 1: Colorize Background, 2: Flash Background).
-*   `critical_service_name` (string): Name of a ROS 2 service (type `wifi_viz/srv/TriggerCriticalAction`) intended to be called when a critical condition is met. **Note:** This C++ plugin currently uses the RViz property "Critical Service Name" to configure the actual service call, not this message field directly. This field is primarily for informational purposes or for other potential subscribers.
+*   `critical_service_name` (string): Name of a ROS 2 service (type `wifi_viz/srv/TriggerCriticalAction`) intended to be called when a critical condition is met. If this field is non-empty in a received message, the RViz plugin will automatically update its "Critical Service Name" property to this value, potentially changing which service gets called.
 *   `title` (string): Optional title displayed. Position depends on `compact` flag and orientation. If empty, the topic name is used.
 *   `compact` (bool): If true, uses a more compact layout (e.g., title beside bar in horizontal mode). If false, uses the default layout (e.g., title below bar in horizontal mode).
 *   `current_color` (std_msgs/ColorRGBA): Color used to draw the fill of the bar representing the current value. Alpha > 0 is required to override the default green/yellow/red gradient.

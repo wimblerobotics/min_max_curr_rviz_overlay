@@ -343,6 +343,19 @@ void WifiStateDisplay::processMessage(wifi_viz::msg::MinMaxCurr::ConstSharedPtr 
                         (!last_msg_->title.empty() && last_msg_->title != msg->title) || // Title changed
                         (last_msg_->title.empty() && msg->title.empty() && !topic_property_->getTopicStd().empty() && topic_text_width_ == 0); // No title, but topic exists and width wasn't calculated yet
 
+  // --- Update Critical Service Name Property from Message ---
+  // Check if the message provides a service name and if it differs from the current property setting
+  if (!msg->critical_service_name.empty() &&
+      critical_service_name_property_->getStdString() != msg->critical_service_name)
+  {
+    RVIZ_COMMON_LOG_INFO_STREAM("Updating Critical Service Name property from message: " << msg->critical_service_name);
+    // Set the property value. This will automatically trigger the updateCriticalService() slot.
+    // Use QVariant to set the StringProperty value.
+    critical_service_name_property_->setValue(QString::fromStdString(msg->critical_service_name));
+    // Note: updateCriticalService() will handle client creation/resetting.
+  }
+  // --- End Service Name Update ---
+
   last_msg_ = msg; // Store the entire message
 
   // If layout changed, force property update which recalculates dimensions and texture
