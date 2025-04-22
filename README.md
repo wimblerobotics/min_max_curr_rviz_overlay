@@ -18,6 +18,7 @@ This package provides an RViz display plugin that visualizes a numerical value r
 *   Configurable numeric precision for displayed values (`precision`).
 *   Supports both horizontal and vertical bar orientation.
 *   Optional compact layout (`compact`) to arrange elements differently (e.g., title beside bar).
+*   Optional ROS 2 Service call on critical condition via RViz property (`Critical Service Name`).
 
 ## Installation
 
@@ -63,9 +64,17 @@ This package provides an RViz display plugin that visualizes a numerical value r
 3.  **Configure the Display:**
     *   Select the "MinMaxCurrDisplay" in the Displays panel.
     *   Set the "Topic" property to the ROS 2 topic where `wifi_viz/msg/MinMaxCurr` messages will be published (e.g., `/battery_percentage_overlay`).
+    *   **Critical Service Name**: Optionally, set this property to the name of a ROS 2 service (type `wifi_viz/srv/TriggerCriticalAction`) that should be called when the value enters a critical state (e.g., `/trigger_critical_action`). Leave empty to disable.
     *   Adjust other properties like width, height, position, colors, font size, and orientation as needed.
 
-4.  **Publish Data:**
+4.  **Run the Critical Action Service (Optional):**
+    If you configured a "Critical Service Name", you need to run a node providing that service. A default logging service is included:
+    ```bash
+    # In a sourced terminal
+    ros2 run wifi_viz default_critical_action_service.py
+    ```
+
+5.  **Publish Data:**
     Publish messages of type `wifi_viz/msg/MinMaxCurr` to the topic you configured.
 
 ## Examples
@@ -162,6 +171,27 @@ ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
 }'
 ```
 
+**Example 5: Triggering the Critical Service**
+
+This example assumes the display's "Critical Service Name" property is set to `/trigger_critical_action` and the `default_critical_action_service.py` node is running. When the message is published, the value (0.15) is critical, and the service will be called, logging the message data to the service node's console. The display itself will use COLORIZE animation.
+
+```bash
+ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
+  min: 0.0,
+  max: 1.0,
+  current: 0.15,
+  critical_value: 0.25,
+  critical_if_under: true,
+  critical_animation_type: 1, # ANIMATION_COLORIZE
+  critical_service_name: "/trigger_critical_action", # This field in msg is currently informational
+  title: "Battery %",
+  compact: false,
+  current_color: {r: 0.0, g: 1.0, b: 0.0, a: 1.0}, # Green
+  critical_color: {r: 0.5, g: 0.0, b: 0.5, a: 1.0},  # Purple
+  precision: 2
+}'
+```
+
 ## Message Fields (`wifi_viz/msg/MinMaxCurr`)
 
 *   `min` (float32): The minimum possible value for the range.
@@ -170,9 +200,18 @@ ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
 *   `critical_value` (float32): The threshold for the critical state.
 *   `critical_if_under` (bool): If true, the state is critical when `current < critical_value`. If false, critical when `current > critical_value`.
 *   `critical_animation_type` (uint8): Type of animation for critical state (0: None, 1: Colorize Background, 2: Flash Background).
+*   `critical_service_name` (string): Name of a ROS 2 service (type `wifi_viz/srv/TriggerCriticalAction`) intended to be called when a critical condition is met. (Note: This C++ plugin currently uses the RViz property "Critical Service Name" to configure the service call, not this message field directly).
 *   `critical_python_function` (string): (Not currently used by this C++ display) Path to a Python function for custom critical logic.
 *   `title` (string): Optional title displayed. Position depends on `compact` flag and orientation. If empty, the topic name is used.
 *   `compact` (bool): If true, uses a more compact layout (e.g., title beside bar in horizontal mode). If false, uses the default layout (e.g., title below bar in horizontal mode).
 *   `current_color` (std_msgs/ColorRGBA): Color used to draw the fill of the bar representing the current value. Alpha > 0 is required to override the default green/yellow/red gradient.
 *   `critical_color` (std_msgs/ColorRGBA): Color used for the background during COLORIZE or FLASH animations when in a critical state.
 *   `precision` (uint8): Number of decimal places to display for the min, max, and current values (default: 1).
+
+## Service Definition (`wifi_viz/srv/TriggerCriticalAction`)
+
+*   **Request:**
+    *   `json_data` (string): The full `MinMaxCurr` message data that triggered the critical state, represented as a JSON string.
+*   **Response:**
+    *   `success` (bool): Indicates if the service logic executed successfully.
+    *   `message` (string): An optional status message from the service.

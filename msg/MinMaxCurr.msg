@@ -26,8 +26,10 @@ float32 critical_value
 # If false, 'current' > 'critical_value' is critical.
 bool critical_if_under true
 
-# Future
-string critical_python_function
+# Name of a ROS 2 service to call when a critical condition is met.
+# The service should be of type TriggerCriticalAction.
+# (Note: This C++ plugin currently uses a dedicated RViz property instead).
+string critical_service_name
 
 # How to indicate a critical state
 uint8 ANIMATION_NONE=0

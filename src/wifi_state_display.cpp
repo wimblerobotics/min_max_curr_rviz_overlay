@@ -2,6 +2,8 @@
 
 #include <algorithm> // For std::max, std::min
 #include <chrono>    // Add chrono include
+#include <sstream>   // For string stream (JSON conversion)
+#include <iomanip>   // For std::fixed, std::setprecision
 
 // Ogre Headers
 #include <OgreHardwarePixelBuffer.h>
@@ -27,14 +29,17 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rviz_common/display_context.hpp>
 #include <rviz_common/logging.hpp>
+#include <rviz_common/properties/string_property.hpp> // Include StringProperty header
 
 // Custom Message Header
 #include "wifi_viz/msg/min_max_curr.hpp"
+#include "wifi_viz/srv/trigger_critical_action.hpp" // Include service header
 
 namespace wifi_viz
 {
 
 using BaseDisplayClass = rviz_common::RosTopicDisplay<wifi_viz::msg::MinMaxCurr>;
+using TriggerCriticalAction = wifi_viz::srv::TriggerCriticalAction; // Alias for service type
 
 WifiStateDisplay::WifiStateDisplay()
 : BaseDisplayClass(),
@@ -46,7 +51,9 @@ WifiStateDisplay::WifiStateDisplay()
   max_text_width_(0), // Initialize
   topic_text_width_(0), // Initialize topic text width
   text_margin_(5),    // Initialize margin
-  show_critical_flash_(true) // Initialize flash state
+  show_critical_flash_(true), // Initialize flash state
+  critical_service_client_(nullptr), // Initialize client pointer
+  critical_service_pending_(false)
 {
   static int instance_count = 0;
   instance_count++;
@@ -94,6 +101,12 @@ WifiStateDisplay::WifiStateDisplay()
     "Vertical Mode", false, "Display the bar vertically instead of horizontally.",
     this, SLOT(updateProperties()), this);
 
+  // Add Critical Service Name Property
+  critical_service_name_property_ = new rviz_common::properties::StringProperty(
+    "Critical Service Name", "",
+    "Name of the TriggerCriticalAction service to call when value is critical. Leave empty to disable.",
+    this, SLOT(updateCriticalService()), this);
+
   // Initialize flash timer
   last_flash_time_ = std::chrono::steady_clock::now();
 }
@@ -128,10 +141,15 @@ void WifiStateDisplay::onInitialize()
 {
   BaseDisplayClass::onInitialize();
 
+  // Create the ROS 2 node needed for the service client
+  // The node is managed by the DisplayContext
+  auto node = context_->getRosNodeAbstraction().lock()->get_raw_node();
+
   setStatus(rviz_common::properties::StatusProperty::Warn, "Topic", "No topic selected");
+  setStatus(rviz_common::properties::StatusProperty::Ok, "Critical Service", "No service configured."); // Initial status
 
   ensureOverlay();
-
+  updateCriticalService(); // Create client based on initial property value
   updateProperties();
   RVIZ_COMMON_LOG_INFO("WifiStateDisplay: Initialized.");
 }
@@ -206,33 +224,98 @@ void WifiStateDisplay::update(float wall_dt, float ros_dt)
   // *** Crucial: Call the base class update method ***
   BaseDisplayClass::update(wall_dt, ros_dt);
 
-  // --- Handle Flashing Animation Timer ---
+  bool needs_service_call = false; // Flag to trigger service call outside flash logic
+
+  // --- Handle Flashing Animation Timer & Critical State Check ---
   if (last_msg_) {
     bool is_critical = last_msg_->critical_if_under ?
                        last_msg_->current < last_msg_->critical_value :
                        last_msg_->current > last_msg_->critical_value;
 
-    if (is_critical && last_msg_->critical_animation_type == wifi_viz::msg::MinMaxCurr::ANIMATION_FLASH) {
-      auto now = std::chrono::steady_clock::now();
-      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_flash_time_);
-      if (elapsed.count() > 500) { // Flash interval (500ms)
-        show_critical_flash_ = !show_critical_flash_;
-        last_flash_time_ = now;
-        needs_redraw_ = true; // Trigger redraw to show/hide
-      }
+    if (is_critical) {
+        // Mark that a service call might be needed if configured
+        needs_service_call = true;
+
+        // Handle flashing animation
+        if (last_msg_->critical_animation_type == wifi_viz::msg::MinMaxCurr::ANIMATION_FLASH) {
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_flash_time_);
+            if (elapsed.count() > 500) { // Flash interval (500ms)
+                show_critical_flash_ = !show_critical_flash_;
+                last_flash_time_ = now;
+                needs_redraw_ = true; // Trigger redraw to show/hide
+            }
+        } else {
+             // Ensure flash is reset to visible if not flashing type but critical
+             if (!show_critical_flash_) {
+                 show_critical_flash_ = true;
+                 needs_redraw_ = true;
+             }
+        }
     } else {
-      // Ensure flash is reset to visible if not critical or not flashing type
+      // Not critical: Reset flash state and pending service call flag
       if (!show_critical_flash_) {
           show_critical_flash_ = true;
           needs_redraw_ = true;
       }
+      critical_service_pending_ = false; // Reset pending flag if no longer critical
     }
+  } else {
+      // No message: Reset flash state and pending service call flag
+      if (!show_critical_flash_) {
+          show_critical_flash_ = true;
+          needs_redraw_ = true;
+      }
+      critical_service_pending_ = false;
   }
-  // --- End Flashing Logic ---
+  // --- End Flashing & Critical Check ---
 
-  // Check if the overlay needs to be redrawn (flag set by processMessage, updateProperties, or flash timer)
+  // --- Trigger Critical Service Call (if needed and not already pending) ---
+  if (needs_service_call && critical_service_client_ && !critical_service_pending_) {
+      // Check if service is available (optional, async call handles unavailability)
+      // if (!critical_service_client_->service_is_ready()) {
+      //     RVIZ_COMMON_LOG_WARNING_STREAM("Critical service '" << critical_service_name_property_->getStdString() << "' not available.");
+      //     setStatus(rviz_common::properties::StatusProperty::Warn, "Critical Service", "Service not available.");
+      // } else
+      {
+          setStatus(rviz_common::properties::StatusProperty::Ok, "Critical Service", "Calling service...");
+          critical_service_pending_ = true; // Set flag to prevent spamming
+
+          auto request = std::make_shared<TriggerCriticalAction::Request>();
+          request->json_data = messageToJson(*last_msg_);
+
+          // Use weak_ptr for safety in async callback
+          // Call weak_from_this() as a member function
+          auto weak_this = this->weak_from_this();
+          critical_service_client_->async_send_request(
+              request,
+              [weak_this](rclcpp::Client<TriggerCriticalAction>::SharedFuture future) {
+                  auto shared_this = weak_this.lock();
+                  if (!shared_this) {
+                      // Plugin might have been destroyed
+                      return;
+                  }
+                  // Reset pending flag regardless of outcome
+                  shared_this->critical_service_pending_ = false;
+                  try {
+                      auto response = future.get();
+                      if (response->success) {
+                          RVIZ_COMMON_LOG_INFO_STREAM("Critical service call successful: " << response->message);
+                          shared_this->setStatus(rviz_common::properties::StatusProperty::Ok, "Critical Service", "Call successful.");
+                      } else {
+                          RVIZ_COMMON_LOG_ERROR_STREAM("Critical service call failed: " << response->message);
+                          shared_this->setStatus(rviz_common::properties::StatusProperty::Error, "Critical Service", "Call failed: " + QString::fromStdString(response->message));
+                      }
+                  } catch (const std::exception &e) {
+                      RVIZ_COMMON_LOG_ERROR_STREAM("Exception during critical service call: " << e.what());
+                      shared_this->setStatus(rviz_common::properties::StatusProperty::Error, "Critical Service", "Call exception.");
+                  }
+              });
+      }
+  }
+
+  // Check if the overlay needs to be redrawn
   if (needs_redraw_) {
-    // Check if overlay elements are valid before drawing
     if (overlay_ && panel_ && texture_ && !texture_image_.isNull()) {
         updateOverlayTexture();
         needs_redraw_ = false; // Reset the flag after redrawing
@@ -269,7 +352,6 @@ void WifiStateDisplay::processMessage(wifi_viz::msg::MinMaxCurr::ConstSharedPtr 
       needs_redraw_ = true; // Otherwise, just redraw with existing texture size
   }
 }
-
 
 // Helper function to calculate dimensions based on properties and message
 void WifiStateDisplay::calculateDimensions(
@@ -342,7 +424,6 @@ void WifiStateDisplay::calculateDimensions(
     total_height = std::max(10, total_height);
 }
 
-
 void WifiStateDisplay::updateProperties()
 {
   ensureOverlay();
@@ -357,7 +438,6 @@ void WifiStateDisplay::updateProperties()
   // Use the helper function to get all dimensions based on current props and last_msg_
   calculateDimensions(total_width, total_height, bar_width, bar_height,
                       min_text_width_, max_text_width_, topic_text_width_, text_height_);
-
 
   // --- Update Panel ---
   try {
@@ -495,7 +575,7 @@ void WifiStateDisplay::updateOverlayTexture()
 
   if (is_critical) {
     if (last_msg_->critical_animation_type == wifi_viz::msg::MinMaxCurr::ANIMATION_COLORIZE) {
-      background_color = QColor( /* ... get critical color ... */
+      background_color = QColor(
         static_cast<int>(last_msg_->critical_color.r * 255.0),
         static_cast<int>(last_msg_->critical_color.g * 255.0),
         static_cast<int>(last_msg_->critical_color.b * 255.0),
@@ -503,7 +583,7 @@ void WifiStateDisplay::updateOverlayTexture()
       );
     } else if (last_msg_->critical_animation_type == wifi_viz::msg::MinMaxCurr::ANIMATION_FLASH) {
       if (show_critical_flash_) {
-        background_color = QColor( /* ... get critical color ... */
+        background_color = QColor(
           static_cast<int>(last_msg_->critical_color.r * 255.0),
           static_cast<int>(last_msg_->critical_color.g * 255.0),
           static_cast<int>(last_msg_->critical_color.b * 255.0),
@@ -601,7 +681,7 @@ void WifiStateDisplay::updateOverlayTexture()
             QRectF frame_draw_rect(bar_rect.left() + frame_thickness / 2.0, bar_rect.top() + frame_thickness / 2.0, bar_rect.width() - frame_thickness, bar_rect.height() - frame_thickness);
             painter.drawRect(frame_draw_rect);
             // Draw Fill
-            QColor bar_color; // ... determine bar color ...
+            QColor bar_color;
              if (last_msg_->current_color.a > 0.01) {
                  bar_color = QColor( static_cast<int>(last_msg_->current_color.r * 255.0), static_cast<int>(last_msg_->current_color.g * 255.0), static_cast<int>(last_msg_->current_color.b * 255.0), static_cast<int>(last_msg_->current_color.a * 255.0) );
              } else {
@@ -662,7 +742,7 @@ void WifiStateDisplay::updateOverlayTexture()
             QRectF frame_draw_rect(bar_rect.left() + frame_thickness / 2.0, bar_rect.top() + frame_thickness / 2.0, bar_rect.width() - frame_thickness, bar_rect.height() - frame_thickness);
             painter.drawRect(frame_draw_rect);
             // Draw Fill
-            QColor bar_color; // ... determine bar color ...
+            QColor bar_color;
              if (last_msg_->current_color.a > 0.01) {
                  bar_color = QColor( static_cast<int>(last_msg_->current_color.r * 255.0), static_cast<int>(last_msg_->current_color.g * 255.0), static_cast<int>(last_msg_->current_color.b * 255.0), static_cast<int>(last_msg_->current_color.a * 255.0) );
              } else {
@@ -729,7 +809,7 @@ void WifiStateDisplay::updateOverlayTexture()
             QRectF frame_draw_rect(bar_rect.left() + frame_thickness / 2.0, bar_rect.top() + frame_thickness / 2.0, bar_rect.width() - frame_thickness, bar_rect.height() - frame_thickness);
             painter.drawRect(frame_draw_rect);
             // Draw Fill
-            QColor bar_color; // ... determine bar color ...
+            QColor bar_color;
              if (last_msg_->current_color.a > 0.01) {
                  bar_color = QColor( static_cast<int>(last_msg_->current_color.r * 255.0), static_cast<int>(last_msg_->current_color.g * 255.0), static_cast<int>(last_msg_->current_color.b * 255.0), static_cast<int>(last_msg_->current_color.a * 255.0) );
              } else {
@@ -775,7 +855,7 @@ void WifiStateDisplay::updateOverlayTexture()
             QRectF frame_draw_rect(bar_rect.left() + frame_thickness / 2.0, bar_rect.top() + frame_thickness / 2.0, bar_rect.width() - frame_thickness, bar_rect.height() - frame_thickness);
             painter.drawRect(frame_draw_rect);
             // Draw Fill
-            QColor bar_color; // ... determine bar color ...
+            QColor bar_color;
              if (last_msg_->current_color.a > 0.01) {
                  bar_color = QColor( static_cast<int>(last_msg_->current_color.r * 255.0), static_cast<int>(last_msg_->current_color.g * 255.0), static_cast<int>(last_msg_->current_color.b * 255.0), static_cast<int>(last_msg_->current_color.a * 255.0) );
              } else {
@@ -839,6 +919,73 @@ void WifiStateDisplay::updateOverlayTexture()
   }
 }
 
+// Slot to update the service client when the property changes
+void WifiStateDisplay::updateCriticalService()
+{
+    std::string service_name = critical_service_name_property_->getStdString();
+    critical_service_client_.reset(); // Reset existing client first
+
+    if (service_name.empty()) {
+        setStatus(rviz_common::properties::StatusProperty::Ok, "Critical Service", "No service configured.");
+        RVIZ_COMMON_LOG_INFO("Critical service name cleared. Disabling service calls.");
+        return;
+    }
+
+    try {
+        // Get the node instance from the display context
+        auto node_abstraction = context_->getRosNodeAbstraction().lock();
+        if (!node_abstraction) {
+            RVIZ_COMMON_LOG_ERROR("Could not get ROS node abstraction.");
+            setStatus(rviz_common::properties::StatusProperty::Error, "Critical Service", "Failed to get node.");
+            return;
+        }
+        auto node = node_abstraction->get_raw_node();
+        if (!node) {
+             RVIZ_COMMON_LOG_ERROR("Could not get raw ROS node pointer.");
+             setStatus(rviz_common::properties::StatusProperty::Error, "Critical Service", "Failed to get node ptr.");
+             return;
+        }
+
+        critical_service_client_ = node->create_client<TriggerCriticalAction>(service_name);
+        setStatus(rviz_common::properties::StatusProperty::Ok, "Critical Service", "Client created for: " + QString::fromStdString(service_name));
+        RVIZ_COMMON_LOG_INFO_STREAM("Created critical service client for: " << service_name);
+    } catch (const std::exception& e) {
+        RVIZ_COMMON_LOG_ERROR_STREAM("Failed to create critical service client: " << e.what());
+        setStatus(rviz_common::properties::StatusProperty::Error, "Critical Service", "Client creation failed.");
+    }
+}
+
+// Helper function to convert message to a simple JSON string
+std::string WifiStateDisplay::messageToJson(const wifi_viz::msg::MinMaxCurr& msg)
+{
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(4); // Control float precision
+
+    ss << "{";
+    ss << "\"title\":\"" << msg.title << "\","; // Basic string escaping might be needed for complex titles
+    ss << "\"min\":" << msg.min << ",";
+    ss << "\"max\":" << msg.max << ",";
+    ss << "\"current\":" << msg.current << ",";
+    ss << "\"current_color\":{"
+       << "\"r\":" << msg.current_color.r << ","
+       << "\"g\":" << msg.current_color.g << ","
+       << "\"b\":" << msg.current_color.b << ","
+       << "\"a\":" << msg.current_color.a << "},";
+    ss << "\"critical_value\":" << msg.critical_value << ",";
+    ss << "\"critical_if_under\":" << (msg.critical_if_under ? "true" : "false") << ",";
+    ss << "\"critical_animation_type\":" << static_cast<int>(msg.critical_animation_type) << ",";
+    ss << "\"critical_color\":{"
+       << "\"r\":" << msg.critical_color.r << ","
+       << "\"g\":" << msg.critical_color.g << ","
+       << "\"b\":" << msg.critical_color.b << ","
+       << "\"a\":" << msg.critical_color.a << "},";
+    ss << "\"precision\":" << static_cast<int>(msg.precision) << ",";
+    ss << "\"compact\":" << (msg.compact ? "true" : "false") << ",";
+    ss << "\"critical_service_name\":\"" << msg.critical_service_name << "\""; // Include service name from msg itself
+    ss << "}";
+
+    return ss.str();
+}
 
 } // namespace wifi_viz
 

@@ -6,11 +6,13 @@
 #include <chrono>
 
 #include "wifi_viz/msg/min_max_curr.hpp"
+#include "wifi_viz/srv/trigger_critical_action.hpp" // Include the service header
 
 #include <rviz_common/ros_topic_display.hpp>
 #include <rviz_common/properties/color_property.hpp>
 #include <rviz_common/properties/int_property.hpp>
 #include <rviz_common/properties/bool_property.hpp>
+#include <rviz_common/properties/string_property.hpp> // Include StringProperty
 
 // Ogre-specific headers
 #include <OgreColourValue.h>
@@ -33,7 +35,9 @@ namespace wifi_viz
 {
 
 // Ensure the template argument matches the message type
-class WifiStateDisplay : public rviz_common::RosTopicDisplay<wifi_viz::msg::MinMaxCurr>
+// Inherit from std::enable_shared_from_this to use weak_from_this()
+class WifiStateDisplay : public rviz_common::RosTopicDisplay<wifi_viz::msg::MinMaxCurr>,
+                         public std::enable_shared_from_this<WifiStateDisplay>
 {
   Q_OBJECT
 
@@ -57,6 +61,8 @@ private Q_SLOTS:
   void updateProperties();
   // Update the texture drawn on the overlay
   void updateOverlayTexture();
+  // Update the service client when the property changes
+  void updateCriticalService();
 
 private:
   // Helper to create/recreate Ogre texture
@@ -68,6 +74,8 @@ private:
     int& total_width, int& total_height,
     int& bar_width, int& bar_height,
     int& min_text_w, int& max_text_w, int& topic_text_w, int& text_h);
+  // Helper to convert message to JSON string
+  std::string messageToJson(const wifi_viz::msg::MinMaxCurr& msg);
 
   // RViz Properties
   rviz_common::properties::IntProperty * width_property_;
@@ -78,6 +86,7 @@ private:
   rviz_common::properties::ColorProperty * text_color_property_;
   rviz_common::properties::IntProperty * font_size_property_;
   rviz_common::properties::BoolProperty * vertical_mode_property_;
+  rviz_common::properties::StringProperty* critical_service_name_property_; // Add service name property
 
   // Ogre Overlay related members
   Ogre::Overlay * overlay_;
@@ -102,6 +111,8 @@ private:
   wifi_viz::msg::MinMaxCurr::ConstSharedPtr last_msg_;
   bool show_critical_flash_;
   std::chrono::time_point<std::chrono::steady_clock> last_flash_time_;
+  rclcpp::Client<wifi_viz::srv::TriggerCriticalAction>::SharedPtr critical_service_client_; // Add service client
+  bool critical_service_pending_ = false; // Flag to prevent spamming service calls
 };
 
 } // namespace wifi_viz

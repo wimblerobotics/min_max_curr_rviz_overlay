@@ -1,0 +1,8 @@
+# Service to trigger an action when a critical state is detected by MinMaxCurrDisplay
+
+# Request
+string json_data  # MinMaxCurr message data represented as a JSON string
+---
+# Response
+bool success      # True if the action was triggered successfully
+string message    # Optional status message

@@ -1,24 +1,31 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.8)
 project(wifi_viz)
 
-# Default to C++14
+# Default to C++17
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
+  set(CMAKE_CXX_STANDARD 17)
+endif()
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
 # Find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rviz_common REQUIRED)
-find_package(rviz_ogre_vendor REQUIRED) # Needed for Ogre overlay classes
+find_package(rviz_ogre_vendor REQUIRED)
 find_package(pluginlib REQUIRED)
-find_package(Qt5 REQUIRED COMPONENTS Core Widgets Gui) # Gui needed for QPainter/QImage
-find_package(rosidl_default_generators REQUIRED) # Added for message generation
-find_package(std_msgs REQUIRED) # Add find_package for std_msgs
+find_package(std_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(Qt5 REQUIRED COMPONENTS Core Widgets Gui)
+find_package(python_cmake_module REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 
-# Generate C++ code from the .msg file
+# Add message and service generation
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MinMaxCurr.msg"
+  "srv/TriggerCriticalAction.srv"
   DEPENDENCIES std_msgs
 )
 
@@ -45,22 +52,21 @@ set(CMAKE_VISIBILITY_INLINES_HIDDEN OFF)
 # Include directories
 include_directories(
   include
-  ${rviz_ogre_vendor_INCLUDE_DIRS} # Add Ogre includes
+  ${rviz_ogre_vendor_INCLUDE_DIRS}
 )
 
 # Add the library with a distinct name
-set(library_target ${PROJECT_NAME}_lib) # Define a new variable for the library target name
-add_library(${library_target} SHARED # Use the new variable here
+set(library_target ${PROJECT_NAME}_lib)
+add_library(${library_target} SHARED
   src/wifi_state_display.cpp
-  # src/wifi_bar_visual.cpp # Uncomment if using this file
   ${MOC_FILES}
 )
 
 # Set visibility macros for the library target
-target_compile_definitions(${library_target} PRIVATE "RVIZ_DEFAULT_PLUGINS_BUILDING_LIBRARY") # Use ${library_target}
+target_compile_definitions(${library_target} PRIVATE "RVIZ_DEFAULT_PLUGINS_BUILDING_LIBRARY")
 
 # Add dependencies for the library target
-ament_target_dependencies(${library_target} # Use ${library_target}
+ament_target_dependencies(${library_target}
   rclcpp
   rviz_common
   rviz_ogre_vendor
@@ -69,7 +75,7 @@ ament_target_dependencies(${library_target} # Use ${library_target}
 )
 
 # Link Qt, Ogre, and the generated message typesupport library
-target_link_libraries(${library_target} # Use ${library_target}
+target_link_libraries(${library_target}
   Qt5::Core
   Qt5::Widgets
   Qt5::Gui
@@ -78,7 +84,7 @@ target_link_libraries(${library_target} # Use ${library_target}
 )
 
 # Export include directory for the library target
-target_include_directories(${library_target} PUBLIC # Use ${library_target}
+target_include_directories(${library_target} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
@@ -87,8 +93,8 @@ target_include_directories(${library_target} PUBLIC # Use ${library_target}
 pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)
 
 # Install the library target
-install(TARGETS ${library_target} # Use ${library_target}
-  EXPORT ${library_target}_export # Create export name based on library target
+install(TARGETS ${library_target}
+  EXPORT ${library_target}_export
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -104,16 +110,14 @@ install(FILES plugin_description.xml
   DESTINATION share/${PROJECT_NAME}
 )
 
-# Install Python scripts
+# Install Python scripts using absolute path
 install(PROGRAMS
-  src/battery_to_minmax_publisher.py
+  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/default_critical_action_service.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
 # Exports
-# Export ONLY the library target's export set
-ament_export_targets(${library_target}_export HAS_LIBRARY_TARGET) # Use the export name matching install()
-# Export dependencies
+ament_export_targets(${library_target}_export HAS_LIBRARY_TARGET)
 ament_export_dependencies(
   rclcpp
   rviz_common
@@ -122,6 +126,8 @@ ament_export_dependencies(
   Qt5
   rosidl_default_runtime
   std_msgs
+  rclpy
 )
 
+# Register package - MUST BE LAST
 ament_package()
