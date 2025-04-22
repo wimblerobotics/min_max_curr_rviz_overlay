@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <chrono> // <<< Add chrono include
 
 #include "wifi_viz/msg/min_max_curr.hpp"
 
@@ -92,9 +93,9 @@ private:
   int text_margin_;      // <<< Add variable for margin
 
   // State
-  float current_value_;
-  float min_value_;
-  float max_value_;
+  wifi_viz::msg::MinMaxCurr::ConstSharedPtr last_msg_; // <<< ADD: Store the last message
+  bool show_critical_flash_; // <<< ADD: State for flashing animation
+  std::chrono::time_point<std::chrono::steady_clock> last_flash_time_; // <<< ADD: Timer for flashing
 };
 
 } // namespace wifi_viz
