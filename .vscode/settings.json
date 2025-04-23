@@ -1,7 +1,5 @@
 {
     "python.autoComplete.extraPaths": [
-        "/home/ros/sigyn_ws/build/wifi_signal_visualizer",
-        "/home/ros/sigyn_ws/install/wifi_signal_visualizer/lib/python3.12/site-packages",
         "/home/ros/sigyn_ws/install/sigyn_interfaces/lib/python3.12/site-packages",
         "/home/ros/sigyn_ws/install/sigyn_behavior_trees/lib/python3.12/site-packages",
         "/home/ros/sigyn_ws/build/py_scripts",
@@ -12,8 +10,6 @@
         "/opt/ros/jazzy/lib/python3.12/site-packages"
     ],
     "python.analysis.extraPaths": [
-        "/home/ros/sigyn_ws/build/wifi_signal_visualizer",
-        "/home/ros/sigyn_ws/install/wifi_signal_visualizer/lib/python3.12/site-packages",
         "/home/ros/sigyn_ws/install/sigyn_interfaces/lib/python3.12/site-packages",
         "/home/ros/sigyn_ws/install/sigyn_behavior_trees/lib/python3.12/site-packages",
         "/home/ros/sigyn_ws/build/py_scripts",

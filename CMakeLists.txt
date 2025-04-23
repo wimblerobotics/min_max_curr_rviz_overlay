@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(wifi_viz)
+project(min_max_curr_rviz_overlay)
 
 # Default to C++17
 if(NOT CMAKE_CXX_STANDARD)
@@ -42,7 +42,7 @@ set(CMAKE_AUTOMOC_SEARCH_PATHS include src)
 
 # Add explicit MOC processing for our display class
 qt5_wrap_cpp(MOC_FILES
-  include/wifi_viz/wifi_state_display.hpp
+  include/min_max_curr_rviz_overlay/min_max_curr_display.hpp
 )
 
 # Force symbol visibility for exported classes
@@ -58,7 +58,7 @@ include_directories(
 # Add the library with a distinct name
 set(library_target ${PROJECT_NAME}_lib)
 add_library(${library_target} SHARED
-  src/wifi_state_display.cpp
+  src/min_max_curr_display.cpp
   ${MOC_FILES}
 )
 

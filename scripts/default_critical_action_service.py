@@ -3,7 +3,7 @@
 import rclpy
 from rclpy.node import Node
 import json
-from wifi_viz.srv import TriggerCriticalAction # Import the service type
+from min_max_curr_rviz_overlay.srv import TriggerCriticalAction # Import the service type
 
 class DefaultCriticalActionService(Node):
     """

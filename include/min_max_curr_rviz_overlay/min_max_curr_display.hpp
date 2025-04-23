@@ -1,12 +1,12 @@
-#ifndef WIFI_VIZ__WIFI_STATE_DISPLAY_HPP_
-#define WIFI_VIZ__WIFI_STATE_DISPLAY_HPP_
+#ifndef MIN_MAX_CURR_RVIZ_OVERLAY__MIN_MAX_CURR_DISPLAY_HPP_
+#define MIN_MAX_CURR_RVIZ_OVERLAY__MIN_MAX_CURR_DISPLAY_HPP_
 
 #include <memory>
 #include <string>
 #include <chrono>
 
-#include "wifi_viz/msg/min_max_curr.hpp"
-#include "wifi_viz/srv/trigger_critical_action.hpp" // Include the service header
+#include "min_max_curr_rviz_overlay/msg/min_max_curr.hpp"
+#include "min_max_curr_rviz_overlay/srv/trigger_critical_action.hpp" // Include the service header
 
 #include <rviz_common/ros_topic_display.hpp>
 #include <rviz_common/properties/color_property.hpp>
@@ -31,19 +31,19 @@ class Overlay;
 class PanelOverlayElement;
 } // namespace Ogre
 
-namespace wifi_viz
+namespace min_max_curr_rviz_overlay
 {
 
 // Ensure the template argument matches the message type
 // Inherit from std::enable_shared_from_this to use weak_from_this()
-class WifiStateDisplay : public rviz_common::RosTopicDisplay<wifi_viz::msg::MinMaxCurr>,
-                         public std::enable_shared_from_this<WifiStateDisplay>
+class MinMaxCurrDisplay : public rviz_common::RosTopicDisplay<min_max_curr_rviz_overlay::msg::MinMaxCurr>,
+                          public std::enable_shared_from_this<MinMaxCurrDisplay>
 {
   Q_OBJECT
 
 public:
-  WifiStateDisplay();
-  ~WifiStateDisplay() override;
+  MinMaxCurrDisplay();
+  ~MinMaxCurrDisplay() override;
 
   // RViz Display overrides
   void onInitialize() override;
@@ -54,7 +54,7 @@ public:
 
 protected:
   // Message handling overrides
-  void processMessage(wifi_viz::msg::MinMaxCurr::ConstSharedPtr msg) override;
+  void processMessage(min_max_curr_rviz_overlay::msg::MinMaxCurr::ConstSharedPtr msg) override;
 
 private Q_SLOTS:
   // Update display based on property changes
@@ -75,7 +75,7 @@ private:
     int& bar_width, int& bar_height,
     int& min_text_w, int& max_text_w, int& topic_text_w, int& text_h);
   // Helper to convert message to JSON string
-  std::string messageToJson(const wifi_viz::msg::MinMaxCurr& msg);
+  std::string messageToJson(const min_max_curr_rviz_overlay::msg::MinMaxCurr& msg);
 
   // RViz Properties
   rviz_common::properties::IntProperty * width_property_;
@@ -108,13 +108,13 @@ private:
   int text_margin_;
 
   // State
-  wifi_viz::msg::MinMaxCurr::ConstSharedPtr last_msg_;
+  min_max_curr_rviz_overlay::msg::MinMaxCurr::ConstSharedPtr last_msg_;
   bool show_critical_flash_;
   std::chrono::time_point<std::chrono::steady_clock> last_flash_time_;
-  rclcpp::Client<wifi_viz::srv::TriggerCriticalAction>::SharedPtr critical_service_client_; // Add service client
+  rclcpp::Client<min_max_curr_rviz_overlay::srv::TriggerCriticalAction>::SharedPtr critical_service_client_; // Add service client
   bool critical_service_pending_ = false; // Flag to prevent spamming service calls
 };
 
-} // namespace wifi_viz
+} // namespace min_max_curr_rviz_overlay
 
-#endif // WIFI_VIZ__WIFI_STATE_DISPLAY_HPP_
+#endif // MIN_MAX_CURR_RVIZ_OVERLAY__MIN_MAX_CURR_DISPLAY_HPP_

@@ -34,7 +34,7 @@ This package provides an RViz display plugin that visualizes a numerical value r
 
     ```bash
     cd ~/min_max_curr_rviz_overlay_ws
-    colcon build --symlink-install --packages-select wifi_viz
+    colcon build --symlink-install --packages-select min_max_curr_rviz_overlay
     ```
 
 3.  **Source the Overlay:**
@@ -56,13 +56,13 @@ This package provides an RViz display plugin that visualizes a numerical value r
 
 2.  **Add the Display:**
     *   In RViz, click the "Add" button in the "Displays" panel.
-    *   Find the "MinMaxCurrDisplay" plugin under the "wifi_viz" category.
+    *   Find the "MinMaxCurrDisplay" plugin under the "min_max_curr_rviz_overlay" category.
     *   Click "OK".
 
 3.  **Configure the Display:**
     *   Select the "MinMaxCurrDisplay" in the Displays panel.
-    *   Set the "Topic" property to the ROS 2 topic where `wifi_viz/msg/MinMaxCurr` messages will be published (e.g., `/battery_percentage_overlay`).
-    *   **Critical Service Name**: Optionally, set this property to the name of a ROS 2 service (type `wifi_viz/srv/TriggerCriticalAction`) that should be called when the value enters a critical state (e.g., `/trigger_critical_action`).
+    *   Set the "Topic" property to the ROS 2 topic where `min_max_curr_rviz_overlay/msg/MinMaxCurr` messages will be published (e.g., `/battery_percentage_overlay`).
+    *   **Critical Service Name**: Optionally, set this property to the name of a ROS 2 service (type `min_max_curr_rviz_overlay/srv/TriggerCriticalAction`) that should be called when the value enters a critical state (e.g., `/trigger_critical_action`).
         *   If a received message on the topic contains a non-empty `critical_service_name` field, this property will be automatically updated to match the value from the message.
         *   You can manually override this property in RViz after a message has set it.
         *   **Important:** The service is called only when the state *transitions* from non-critical to critical. It will not be called repeatedly if the value remains critical over multiple messages. It will be called again only after the value becomes non-critical and then enters the critical state once more.
@@ -73,12 +73,12 @@ This package provides an RViz display plugin that visualizes a numerical value r
     If you configured a "Critical Service Name", you need to run a node providing that service in a separate, sourced terminal. A default logging service is included:
     ```bash
     # In a sourced terminal
-    ros2 run wifi_viz default_critical_action_service.py
+    ros2 run min_max_curr_rviz_overlay default_critical_action_service.py
     ```
     This service will print the received message data (as JSON) to the console when called.
 
 5.  **Publish Data:**
-    Publish messages of type `wifi_viz/msg/MinMaxCurr` to the topic you configured. See examples below.
+    Publish messages of type `min_max_curr_rviz_overlay/msg/MinMaxCurr` to the topic you configured. See examples below.
 
     Consider using the [This to That](https://github.com/wimblerobotics/this_to_that) package to easily create a message from an existing topic.
 
@@ -94,7 +94,7 @@ Note that because 'precision' has not been set, the value will show as 0.2 inste
 ~![Example 1](media/overlay_example1.png)
 
 ```bash
-ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
+ros2 topic pub --once /battery_percentage_overlay min_max_curr_rviz_overlay/msg/MinMaxCurr '{
   min: 0.0,
   max: 1.0,
   current: 0.15,
@@ -116,7 +116,7 @@ Value (0.15) is below critical (0.25). Animation is COLORIZE, so the background 
 ~![Example 2](media/overlay_example2.png)
 
 ```bash
-ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
+ros2 topic pub --once /battery_percentage_overlay min_max_curr_rviz_overlay/msg/MinMaxCurr '{
   min: 0.0,
   max: 1.0,
   current: 0.15,
@@ -139,7 +139,7 @@ Same as Example 2, but with `compact: true`. In horizontal mode, the title moves
 ~![Example 3](media/overlay_compact.png)
 
 ```bash
-ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
+ros2 topic pub --once /battery_percentage_overlay min_max_curr_rviz_overlay/msg/MinMaxCurr '{
   min: 0.0,
   max: 1.0,
   current: 0.15,
@@ -162,7 +162,7 @@ Value (0.15) is below critical (0.25). Animation is FLASH, so the background wil
 ~![Example 4](media/overlay_example3.png)
 
 ```bash
-ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
+ros2 topic pub --once /battery_percentage_overlay min_max_curr_rviz_overlay/msg/MinMaxCurr '{
   min: 0.0,
   max: 1.0,
   current: 0.15,
@@ -181,7 +181,7 @@ ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
 
 This example assumes:
 *   The display's "Critical Service Name" property in RViz is set to `/trigger_critical_action`.
-*   The `default_critical_action_service.py` node is running (`ros2 run wifi_viz default_critical_action_service.py`).
+*   The `default_critical_action_service.py` node is running (`ros2 run min_max_curr_rviz_overlay default_critical_action_service.py`).
 
 When the message below is published, the value (0.15) is critical. The RViz display will:
 1.  Show the bar with a purple background (due to `ANIMATION_COLORIZE`).
@@ -190,7 +190,7 @@ When the message below is published, the value (0.15) is critical. The RViz disp
 The service node running in the other terminal will then log the received message data to its console.
 
 ```bash
-ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
+ros2 topic pub --once /battery_percentage_overlay min_max_curr_rviz_overlay/msg/MinMaxCurr '{
   min: 0.0,
   max: 1.0,
   current: 0.15,                   # Value below critical_value
@@ -206,7 +206,7 @@ ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
 }'
 ```
 
-## Message Fields (`wifi_viz/msg/MinMaxCurr`)
+## Message Fields (`min_max_curr_rviz_overlay/msg/MinMaxCurr`)
 
 *   `min` (float32): The minimum possible value for the range.
 *   `max` (float32): The maximum possible value for the range.
@@ -214,14 +214,14 @@ ros2 topic pub --once /battery_percentage_overlay wifi_viz/msg/MinMaxCurr '{
 *   `critical_value` (float32): The threshold for the critical state.
 *   `critical_if_under` (bool): If true, the state is critical when `current < critical_value`. If false, critical when `current > critical_value`.
 *   `critical_animation_type` (uint8): Type of animation for critical state (0: None, 1: Colorize Background, 2: Flash Background).
-*   `critical_service_name` (string): Name of a ROS 2 service (type `wifi_viz/srv/TriggerCriticalAction`) intended to be called when a critical condition is met. If this field is non-empty in a received message, the RViz plugin will automatically update its "Critical Service Name" property to this value, potentially changing which service gets called.
+*   `critical_service_name` (string): Name of a ROS 2 service (type `min_max_curr_rviz_overlay/srv/TriggerCriticalAction`) intended to be called when a critical condition is met. If this field is non-empty in a received message, the RViz plugin will automatically update its "Critical Service Name" property to this value, potentially changing which service gets called.
 *   `title` (string): Optional title displayed. Position depends on `compact` flag and orientation. If empty, the topic name is used.
 *   `compact` (bool): If true, uses a more compact layout (e.g., title beside bar in horizontal mode). If false, uses the default layout (e.g., title below bar in horizontal mode).
 *   `current_color` (std_msgs/ColorRGBA): Color used to draw the fill of the bar representing the current value. Alpha > 0 is required to override the default green/yellow/red gradient.
 *   `critical_color` (std_msgs/ColorRGBA): Color used for the background during COLORIZE or FLASH animations when in a critical state.
 *   `precision` (uint8): Number of decimal places to display for the min, max, and current values (default: 1).
 
-## Service Definition (`wifi_viz/srv/TriggerCriticalAction`)
+## Service Definition (`min_max_curr_rviz_overlay/srv/TriggerCriticalAction`)
 
 This service is called by the RViz plugin when a critical state is detected (if configured via the "Critical Service Name" property).
 

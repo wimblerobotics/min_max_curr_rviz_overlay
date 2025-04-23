@@ -6,7 +6,7 @@
         "limitSymbolsToIncludedHeaders": false
       },
       "includePath": [
-        "/home/ros/wifi_viz_ws/install/wifi_viz/include/**",
+        "/home/ros/min_max_curr_rviz_overlay_ws/install/min_max_curr_rviz_overlay/include/**",
         "/home/ros/sigyn_ws/install/sigyn_nav_goals/include/**",
         "/home/ros/sigyn_ws/install/sigyn_interfaces/include/**",
         "/home/ros/sigyn_ws/install/sigyn_behavior_trees/include/**",
@@ -14,7 +14,7 @@
         "/home/ros/sigyn_ws/install/line_finder/include/**",
         "/home/ros/sigyn_ws/install/base/include/**",
         "/opt/ros/jazzy/include/**",
-        "/home/ros/wifi_viz_ws/src/wifi_viz/include/**",
+        "/home/ros/min_max_curr_rviz_overlay_ws/src/min_max_curr_rviz_overlay/include/**",
         "/usr/include/**"
       ],
       "name": "ROS",

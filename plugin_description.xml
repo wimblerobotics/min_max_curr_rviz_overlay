@@ -1,13 +1,12 @@
-<library path="wifi_viz_lib">
+<library path="min_max_curr_rviz_overlay_lib">
   <class
-    name="wifi_viz/WifiStateDisplay"
-    type="wifi_viz::WifiStateDisplay"
+    name="min_max_curr_rviz_overlay/MinMaxCurrDisplay"
+    type="min_max_curr_rviz_overlay::MinMaxCurrDisplay"
     base_class_type="rviz_common::Display">
     <description>
-      Displays wifi_viz/MinMaxCurr as a 2D bar graph overlay.
+      Displays MinMaxCurr messages as a 2D bar graph overlay.
     </description>
-    <!-- Ensure this matches the message type being published -->
-    <message_type>wifi_viz/msg/MinMaxCurr</message_type>
+    <message_type>min_max_curr_rviz_overlay/msg/MinMaxCurr</message_type>
   </class>
 </library>
 

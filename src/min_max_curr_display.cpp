@@ -1,4 +1,4 @@
-#include "wifi_viz/wifi_state_display.hpp"
+#include "min_max_curr_rviz_overlay/min_max_curr_display.hpp"
 
 #include <algorithm> // For std::max, std::min
 #include <chrono>    // Add chrono include
@@ -32,16 +32,16 @@
 #include <rviz_common/properties/string_property.hpp> // Include StringProperty header
 
 // Custom Message Header
-#include "wifi_viz/msg/min_max_curr.hpp"
-#include "wifi_viz/srv/trigger_critical_action.hpp" // Include service header
+#include "min_max_curr_rviz_overlay/msg/min_max_curr.hpp"
+#include "min_max_curr_rviz_overlay/srv/trigger_critical_action.hpp" // Include service header
 
-namespace wifi_viz
+namespace min_max_curr_rviz_overlay
 {
 
-using BaseDisplayClass = rviz_common::RosTopicDisplay<wifi_viz::msg::MinMaxCurr>;
-using TriggerCriticalAction = wifi_viz::srv::TriggerCriticalAction; // Alias for service type
+using BaseDisplayClass = rviz_common::RosTopicDisplay<min_max_curr_rviz_overlay::msg::MinMaxCurr>;
+using TriggerCriticalAction = min_max_curr_rviz_overlay::srv::TriggerCriticalAction; // Alias for service type
 
-WifiStateDisplay::WifiStateDisplay()
+MinMaxCurrDisplay::MinMaxCurrDisplay()
 : BaseDisplayClass(),
   overlay_(nullptr),
   panel_(nullptr),
@@ -58,10 +58,10 @@ WifiStateDisplay::WifiStateDisplay()
   static int instance_count = 0;
   instance_count++;
 
-  overlay_name_ = "WifiVizOverlay" + Ogre::StringConverter::toString(instance_count);
-  panel_name_ = "WifiVizPanel" + Ogre::StringConverter::toString(instance_count);
-  material_name_ = "WifiVizMaterial" + Ogre::StringConverter::toString(instance_count);
-  texture_name_ = "WifiVizTexture" + Ogre::StringConverter::toString(instance_count);
+  overlay_name_ = "MinMaxCurrOverlay" + Ogre::StringConverter::toString(instance_count);
+  panel_name_ = "MinMaxCurrPanel" + Ogre::StringConverter::toString(instance_count);
+  material_name_ = "MinMaxCurrMaterial" + Ogre::StringConverter::toString(instance_count);
+  texture_name_ = "MinMaxCurrTexture" + Ogre::StringConverter::toString(instance_count);
 
   width_property_ = new rviz_common::properties::IntProperty(
     "Bar Width/Height", 200, "Width (Horizontal) or Height (Vertical) of the bar graph itself in pixels.",
@@ -111,7 +111,7 @@ WifiStateDisplay::WifiStateDisplay()
   last_flash_time_ = std::chrono::steady_clock::now();
 }
 
-WifiStateDisplay::~WifiStateDisplay()
+MinMaxCurrDisplay::~MinMaxCurrDisplay()
 {
   // Clean up Ogre resources
   try {
@@ -137,7 +137,7 @@ WifiStateDisplay::~WifiStateDisplay()
   // Base class destructor will handle property cleanup
 }
 
-void WifiStateDisplay::onInitialize()
+void MinMaxCurrDisplay::onInitialize()
 {
   BaseDisplayClass::onInitialize();
 
@@ -151,10 +151,10 @@ void WifiStateDisplay::onInitialize()
   ensureOverlay();
   updateCriticalService(); // Create client based on initial property value
   updateProperties();
-  RVIZ_COMMON_LOG_INFO("WifiStateDisplay: Initialized.");
+  RVIZ_COMMON_LOG_INFO("MinMaxCurrDisplay: Initialized.");
 }
 
-void WifiStateDisplay::ensureOverlay()
+void MinMaxCurrDisplay::ensureOverlay()
 {
   if (overlay_) {
     return;
@@ -191,7 +191,7 @@ void WifiStateDisplay::ensureOverlay()
     panel_->setMaterialName(material_name_);
 
     overlay_->show();
-    RVIZ_COMMON_LOG_INFO_STREAM("WifiStateDisplay: Created Ogre overlay '" << overlay_name_ << "'.");
+    RVIZ_COMMON_LOG_INFO_STREAM("MinMaxCurrDisplay: Created Ogre overlay '" << overlay_name_ << "'.");
 
   } catch (Ogre::Exception& e) {
       RVIZ_COMMON_LOG_ERROR_STREAM("Error creating Ogre overlay: " << e.getDescription());
@@ -200,7 +200,7 @@ void WifiStateDisplay::ensureOverlay()
   }
 }
 
-void WifiStateDisplay::onEnable()
+void MinMaxCurrDisplay::onEnable()
 {
   BaseDisplayClass::onEnable();
   // Show overlay when enabled
@@ -210,7 +210,7 @@ void WifiStateDisplay::onEnable()
   needs_redraw_ = true; // Trigger redraw on enable
 }
 
-void WifiStateDisplay::onDisable()
+void MinMaxCurrDisplay::onDisable()
 {
   BaseDisplayClass::onDisable();
   // Hide overlay when disabled
@@ -219,7 +219,7 @@ void WifiStateDisplay::onDisable()
   }
 }
 
-void WifiStateDisplay::update(float wall_dt, float ros_dt)
+void MinMaxCurrDisplay::update(float wall_dt, float ros_dt)
 {
   // *** Crucial: Call the base class update method ***
   BaseDisplayClass::update(wall_dt, ros_dt);
@@ -237,7 +237,7 @@ void WifiStateDisplay::update(float wall_dt, float ros_dt)
         needs_service_call = true;
 
         // Handle flashing animation
-        if (last_msg_->critical_animation_type == wifi_viz::msg::MinMaxCurr::ANIMATION_FLASH) {
+        if (last_msg_->critical_animation_type == min_max_curr_rviz_overlay::msg::MinMaxCurr::ANIMATION_FLASH) {
             auto now = std::chrono::steady_clock::now();
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_flash_time_);
             if (elapsed.count() > 500) { // Flash interval (500ms)
@@ -323,7 +323,7 @@ void WifiStateDisplay::update(float wall_dt, float ros_dt)
   }
 }
 
-void WifiStateDisplay::reset()
+void MinMaxCurrDisplay::reset()
 {
   // Call base class reset
   BaseDisplayClass::reset();
@@ -333,7 +333,7 @@ void WifiStateDisplay::reset()
   needs_redraw_ = true;
 }
 
-void WifiStateDisplay::processMessage(wifi_viz::msg::MinMaxCurr::ConstSharedPtr msg)
+void MinMaxCurrDisplay::processMessage(min_max_curr_rviz_overlay::msg::MinMaxCurr::ConstSharedPtr msg)
 {
   // Check if layout-affecting properties changed (compact or title)
   // Also check if it's the first message
@@ -367,7 +367,7 @@ void WifiStateDisplay::processMessage(wifi_viz::msg::MinMaxCurr::ConstSharedPtr 
 }
 
 // Helper function to calculate dimensions based on properties and message
-void WifiStateDisplay::calculateDimensions(
+void MinMaxCurrDisplay::calculateDimensions(
     int& total_width, int& total_height,
     int& bar_width, int& bar_height,
     int& min_text_w, int& max_text_w, int& topic_text_w, int& text_h)
@@ -437,12 +437,12 @@ void WifiStateDisplay::calculateDimensions(
     total_height = std::max(10, total_height);
 }
 
-void WifiStateDisplay::updateProperties()
+void MinMaxCurrDisplay::updateProperties()
 {
   ensureOverlay();
 
   if (!overlay_ || !panel_) {
-    RVIZ_COMMON_LOG_WARNING("WifiStateDisplay: Overlay not ready, cannot update properties.");
+    RVIZ_COMMON_LOG_WARNING("MinMaxCurrDisplay: Overlay not ready, cannot update properties.");
     return;
   }
 
@@ -474,19 +474,19 @@ void WifiStateDisplay::updateProperties()
   }
 
   RVIZ_COMMON_LOG_DEBUG_STREAM(
-    "WifiStateDisplay: Updated properties: mode=" << (vertical_mode_property_->getBool() ? "Vertical" : "Horizontal") <<
+    "MinMaxCurrDisplay: Updated properties: mode=" << (vertical_mode_property_->getBool() ? "Vertical" : "Horizontal") <<
       ", compact=" << (last_msg_ ? last_msg_->compact : false) <<
       ", pos=(" << left_property_->getInt() << "," << top_property_->getInt() <<
       "), total_size=(" << total_width << "," << total_height << ")" <<
       ", bar_size=(" << bar_width << "," << bar_height << ")");
 }
 
-void WifiStateDisplay::createTexture()
+void MinMaxCurrDisplay::createTexture()
 {
   ensureOverlay();
 
   if (!material_) {
-      RVIZ_COMMON_LOG_ERROR("WifiStateDisplay: Material is null, cannot create texture.");
+      RVIZ_COMMON_LOG_ERROR("MinMaxCurrDisplay: Material is null, cannot create texture.");
       return;
   }
 
@@ -543,7 +543,7 @@ void WifiStateDisplay::createTexture()
 
     needs_redraw_ = true; // Mark for redraw
 
-    RVIZ_COMMON_LOG_DEBUG_STREAM("WifiStateDisplay: Created/Recreated texture " << texture_name_ << " with size " << total_width << "x" << total_height);
+    RVIZ_COMMON_LOG_DEBUG_STREAM("MinMaxCurrDisplay: Created/Recreated texture " << texture_name_ << " with size " << total_width << "x" << total_height);
 
   } catch (Ogre::Exception& e) {
       RVIZ_COMMON_LOG_ERROR_STREAM("Error creating/recreating Ogre texture: " << e.getDescription());
@@ -552,12 +552,12 @@ void WifiStateDisplay::createTexture()
   }
 }
 
-void WifiStateDisplay::updateOverlayTexture()
+void MinMaxCurrDisplay::updateOverlayTexture()
 {
   if (!texture_ || texture_image_.isNull() || !last_msg_) { // Also check last_msg_ here
     // Don't log warning if simply no message received yet
     if (last_msg_) {
-        RVIZ_COMMON_LOG_WARNING("WifiStateDisplay: Texture or QImage not ready, skipping redraw.");
+        RVIZ_COMMON_LOG_WARNING("MinMaxCurrDisplay: Texture or QImage not ready, skipping redraw.");
     }
     return;
   }
@@ -587,14 +587,14 @@ void WifiStateDisplay::updateOverlayTexture()
                 last_msg_->current > last_msg_->critical_value;
 
   if (is_critical) {
-    if (last_msg_->critical_animation_type == wifi_viz::msg::MinMaxCurr::ANIMATION_COLORIZE) {
+    if (last_msg_->critical_animation_type == min_max_curr_rviz_overlay::msg::MinMaxCurr::ANIMATION_COLORIZE) {
       background_color = QColor(
         static_cast<int>(last_msg_->critical_color.r * 255.0),
         static_cast<int>(last_msg_->critical_color.g * 255.0),
         static_cast<int>(last_msg_->critical_color.b * 255.0),
         static_cast<int>(last_msg_->critical_color.a * 255.0)
       );
-    } else if (last_msg_->critical_animation_type == wifi_viz::msg::MinMaxCurr::ANIMATION_FLASH) {
+    } else if (last_msg_->critical_animation_type == min_max_curr_rviz_overlay::msg::MinMaxCurr::ANIMATION_FLASH) {
       if (show_critical_flash_) {
         background_color = QColor(
           static_cast<int>(last_msg_->critical_color.r * 255.0),
@@ -933,7 +933,7 @@ void WifiStateDisplay::updateOverlayTexture()
 }
 
 // Slot to update the service client when the property changes
-void WifiStateDisplay::updateCriticalService()
+void MinMaxCurrDisplay::updateCriticalService()
 {
     std::string service_name = critical_service_name_property_->getStdString();
     critical_service_client_.reset(); // Reset existing client first
@@ -969,7 +969,7 @@ void WifiStateDisplay::updateCriticalService()
 }
 
 // Helper function to convert message to a simple JSON string
-std::string WifiStateDisplay::messageToJson(const wifi_viz::msg::MinMaxCurr& msg)
+std::string MinMaxCurrDisplay::messageToJson(const min_max_curr_rviz_overlay::msg::MinMaxCurr& msg)
 {
     std::ostringstream ss;
     ss << std::fixed << std::setprecision(4); // Control float precision
@@ -1000,7 +1000,7 @@ std::string WifiStateDisplay::messageToJson(const wifi_viz::msg::MinMaxCurr& msg
     return ss.str();
 }
 
-} // namespace wifi_viz
+} // namespace min_max_curr_rviz_overlay
 
 #include <pluginlib/class_list_macros.hpp>
-PLUGINLIB_EXPORT_CLASS(wifi_viz::WifiStateDisplay, rviz_common::Display)
+PLUGINLIB_EXPORT_CLASS(min_max_curr_rviz_overlay::MinMaxCurrDisplay, rviz_common::Display)
