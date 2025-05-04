@@ -129,5 +129,8 @@ ament_export_dependencies(
   rclpy
 )
 
+# Export runtime interfaces
+ament_export_dependencies(rosidl_default_runtime)
+
 # Register package - MUST BE LAST
 ament_package()
